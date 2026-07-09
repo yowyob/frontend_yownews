@@ -1,0 +1,362 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { useEditor, EditorContent, type Editor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Link from '@tiptap/extension-link';
+import Placeholder from '@tiptap/extension-placeholder';
+import { apiFetch } from '@/lib/api-client';
+import ContentEditor from '@/components/content-editor/ContentEditor';
+import type { ContentTypeConfig, ExtraBodyResult, InitialContent } from '@/components/content-editor/types';
+import { clearDraft, isDraftMeaningful, loadDraft } from '@/components/content-editor/draftCache';
+import StatusBadge from '@/components/education/StatusBadge';
+import RowMenu from '@/components/education/RowMenu';
+import BlogPreviewModal from '@/components/education/BlogPreviewModal';
+
+const DRAFT_KIND = 'blog';
+
+type Blog = {
+  id: string;
+  title: string;
+  domain?: string | null;
+  status?: string | null;
+  createdAt?: string | null;
+  publishedAt?: string | null;
+  updatedAt?: string | null;
+};
+
+type BlogDetail = Blog & {
+  description?: string | null;
+  content?: string | null;
+  rawContent?: string | null;
+  customDomain?: string | null;
+  freeTags?: string[] | null;
+  freeCategories?: string[] | null;
+  categories?: string[] | null;
+  tags?: string[] | null;
+};
+
+const WORDS_PER_MIN = 200;
+
+const dateTimeFormatter = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+
+function formatDateTime(iso?: string | null) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : dateTimeFormatter.format(d);
+}
+
+// ── Barre d'outils TipTap ─────────────────────────────────────────────────────
+function Toolbar({ editor }: { editor: Editor | null }) {
+  if (!editor) return null;
+  const btn = (active: boolean): React.CSSProperties => ({
+    border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '6px', padding: '5px 9px',
+    fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: active ? 'var(--primary)' : '#fff',
+    color: active ? '#fff' : 'var(--gray-700, #374151)',
+  });
+  const setLink = () => {
+    const prev = editor.getAttributes('link').href as string | undefined;
+    const url = window.prompt('URL du lien', prev ?? 'https://');
+    if (url === null) return;
+    if (url === '') { editor.chain().focus().extendMarkRange('link').unsetLink().run(); return; }
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  };
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px', borderBottom: '1px solid var(--gray-200, #e5e7eb)' }}>
+      <button type="button" style={btn(editor.isActive('bold'))} onClick={() => editor.chain().focus().toggleBold().run()}><b>B</b></button>
+      <button type="button" style={btn(editor.isActive('italic'))} onClick={() => editor.chain().focus().toggleItalic().run()}><i>I</i></button>
+      <button type="button" style={btn(editor.isActive('heading', { level: 2 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
+      <button type="button" style={btn(editor.isActive('heading', { level: 3 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>H3</button>
+      <button type="button" style={btn(editor.isActive('bulletList'))} onClick={() => editor.chain().focus().toggleBulletList().run()}>• Liste</button>
+      <button type="button" style={btn(editor.isActive('orderedList'))} onClick={() => editor.chain().focus().toggleOrderedList().run()}>1. Liste</button>
+      <button type="button" style={btn(editor.isActive('blockquote'))} onClick={() => editor.chain().focus().toggleBlockquote().run()}>❝</button>
+      <button type="button" style={btn(editor.isActive('link'))} onClick={setLink}>Lien</button>
+    </div>
+  );
+}
+
+// ── Onglet « Créer / Modifier » : éditeur générique + corps TipTap ─────────────
+function CreateBlogTab({ editing, onDone }: { editing: BlogDetail | null; onDone: () => void }) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Link.configure({ openOnClick: false }),
+      Placeholder.configure({ placeholder: 'Rédigez votre article…' }),
+    ],
+    content: editing?.content ?? '',
+    immediatelyRender: false,
+  });
+
+  const config: ContentTypeConfig = {
+    noun: 'Blog',
+    createPath: editing ? `/api/education/blogs/${editing.id}` : '/api/education/blogs',
+    method: editing ? 'PUT' : 'POST',
+    coverPath: (id) => `/api/education/blogs/${id}/cover`,
+    extraFields: (
+      <div>
+        <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', display: 'block' }}>Contenu</label>
+        <div style={{ border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '10px', overflow: 'hidden', background: '#fff' }}>
+          <Toolbar editor={editor} />
+          <div style={{ padding: '12px 14px', minHeight: '220px' }}>
+            <EditorContent editor={editor} />
+          </div>
+        </div>
+        <style>{`
+          .ProseMirror { outline: none; min-height: 200px; font-size: 15px; line-height: 1.6; }
+          .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9ca3af; float: left; height: 0; pointer-events: none; }
+          .ProseMirror h2 { font-size: 20px; font-weight: 700; margin: 14px 0 8px; }
+          .ProseMirror h3 { font-size: 17px; font-weight: 700; margin: 12px 0 6px; }
+          .ProseMirror ul, .ProseMirror ol { padding-left: 22px; }
+          .ProseMirror blockquote { border-left: 3px solid #e5e7eb; padding-left: 12px; color: #6b7280; }
+          .ProseMirror a { color: #2563eb; text-decoration: underline; }
+        `}</style>
+      </div>
+    ),
+    buildExtraBody: (): ExtraBodyResult => {
+      const text = editor?.getText() ?? '';
+      if (!text.trim()) return { ok: false, error: 'Le contenu est requis.' };
+      const readingTime = Math.max(1, Math.round(text.trim().split(/\s+/).length / WORDS_PER_MIN));
+      return {
+        ok: true,
+        body: {
+          content: editor?.getHTML() ?? '',
+          rawContent: JSON.stringify(editor?.getJSON() ?? {}),
+          readingTime,
+        },
+      };
+    },
+    resetExtra: () => editor?.commands.clearContent(),
+    draftKey: DRAFT_KIND,
+    getDraftExtra: () => ({ contentHtml: editor?.getHTML() ?? '' }),
+  };
+
+  const onDraftRestored = (extra: Record<string, unknown>) => {
+    if (typeof extra.contentHtml === 'string' && extra.contentHtml) {
+      editor?.commands.setContent(extra.contentHtml);
+    }
+  };
+
+  const initial: InitialContent | undefined = editing
+    ? {
+        title: editing.title,
+        description: editing.description ?? '',
+        domain: editing.domain ?? 'NONE',
+        customDomain: editing.customDomain ?? '',
+        categories: editing.categories ?? [],
+        freeCategories: editing.freeCategories ?? [],
+        tags: editing.tags ?? [],
+        freeTags: editing.freeTags ?? [],
+        coverUrl: `/api/education/blogs/${editing.id}/cover`,
+      }
+    : undefined;
+
+  return (
+    <div>
+      {editing && (
+        <div style={{ marginBottom: '14px', fontSize: '13px', color: 'var(--gray-500, #6b7280)' }}>
+          Modification de « {editing.title} » — <button type="button" onClick={onDone} style={{ border: 'none', background: 'none', color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}>annuler</button>
+        </div>
+      )}
+      <ContentEditor config={config} initial={initial} onCreated={onDone} onDraftRestored={onDraftRestored} />
+    </div>
+  );
+}
+
+// ── Onglet « Mes blogs » ──────────────────────────────────────────────────────
+function MyBlogs({ onEdit }: { onEdit: (blog: BlogDetail) => void }) {
+  const [filter, setFilter] = useState<'DRAFT' | 'SUBMITTED' | 'PUBLISHED'>('DRAFT');
+  const [blogs, setBlogs] = useState<Blog[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<BlogDetail | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setBlogs(null);
+      setError(null);
+      try {
+        const data = await apiFetch<Blog[]>(`/api/education/blogs?status=${filter}`);
+        if (!cancelled) setBlogs(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur de chargement');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [filter, reload]);
+
+  const openPreview = async (id: string) => {
+    setBusyId(id);
+    try {
+      const detail = await apiFetch<BlogDetail>(`/api/education/blogs/${id}`);
+      setPreview(detail);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur de chargement de l\'aperçu');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const startEdit = async (id: string) => {
+    setBusyId(id);
+    try {
+      const detail = await apiFetch<BlogDetail>(`/api/education/blogs/${id}`);
+      onEdit(detail);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur de chargement');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const submit = async (id: string) => {
+    setBusyId(id);
+    try {
+      await apiFetch(`/api/education/blogs/${id}/submit`, { method: 'POST' });
+      setReload((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Échec de la soumission');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (!window.confirm('Supprimer ce blog ? Il sera archivé et retiré de vos listes.')) return;
+    setBusyId(id);
+    try {
+      await apiFetch(`/api/education/blogs/${id}`, { method: 'DELETE' });
+      setReload((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Échec de la suppression');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const tabBtn = (val: 'DRAFT' | 'SUBMITTED' | 'PUBLISHED', labelText: string) => (
+    <button type="button" onClick={() => setFilter(val)} style={{
+      padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+      border: '1px solid var(--gray-200, #e5e7eb)',
+      background: filter === val ? 'var(--primary)' : '#fff',
+      color: filter === val ? '#fff' : 'var(--gray-700, #374151)',
+    }}>{labelText}</button>
+  );
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        {tabBtn('DRAFT', 'Brouillons')}
+        {tabBtn('SUBMITTED', 'En attente de validation')}
+        {tabBtn('PUBLISHED', 'Publiés')}
+      </div>
+
+      {error && <div style={{ padding: '14px', borderRadius: '10px', background: '#FEF2F2', color: '#B91C1C', fontSize: '14px', marginBottom: '12px' }}>{error}</div>}
+      {!blogs && !error && <div style={{ padding: '30px', textAlign: 'center', color: 'var(--gray-500, #6b7280)' }}>Chargement…</div>}
+      {blogs && blogs.length === 0 && !error && (
+        <div style={{ padding: '30px', textAlign: 'center', color: 'var(--gray-500, #6b7280)' }}>Aucun blog dans cette catégorie.</div>
+      )}
+
+      {blogs && blogs.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '12px', overflow: 'visible' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+            <thead>
+              <tr style={{ background: 'var(--gray-50, #f9fafb)', textAlign: 'left' }}>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Titre</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Statut</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Domaine</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Créé le</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Modifié le</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {blogs.map((b) => (
+                <tr key={b.id} style={{ borderTop: '1px solid var(--gray-100, #f3f4f6)' }}>
+                  <td style={{ padding: '12px 16px', fontWeight: 600 }}>{b.title}</td>
+                  <td style={{ padding: '12px 16px' }}><StatusBadge status={b.status} /></td>
+                  <td style={{ padding: '12px 16px', color: 'var(--gray-500, #6b7280)' }}>{b.domain === 'NONE' ? '—' : b.domain}</td>
+                  <td style={{ padding: '12px 16px', color: 'var(--gray-500, #6b7280)' }}>{formatDateTime(b.createdAt)}</td>
+                  <td style={{ padding: '12px 16px', color: 'var(--gray-500, #6b7280)' }}>{formatDateTime(b.updatedAt ?? b.createdAt)}</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                    <RowMenu disabled={busyId === b.id} items={[
+                      { label: 'Prévisualiser', onClick: () => openPreview(b.id) },
+                      ...(filter === 'DRAFT' ? [
+                        { label: 'Modifier', onClick: () => startEdit(b.id) },
+                        { label: 'Valider', onClick: () => submit(b.id) },
+                      ] : []),
+                      ...(filter === 'DRAFT' || filter === 'SUBMITTED' ? [
+                        { label: 'Supprimer', onClick: () => remove(b.id), danger: true },
+                      ] : []),
+                    ]} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {preview && <BlogPreviewModal blog={preview} onClose={() => setPreview(null)} />}
+    </div>
+  );
+}
+
+export default function BlogWorkspace() {
+  const [tab, setTab] = useState<'create' | 'list'>('create');
+  const [editing, setEditing] = useState<BlogDetail | null>(null);
+
+  // En quittant la section Blog (navigation ailleurs dans la sidebar), si un brouillon non
+  // vide traîne en cache locale, on le sauvegarde réellement côté serveur avant de partir.
+  useEffect(() => {
+    return () => {
+      const draft = loadDraft(DRAFT_KIND);
+      if (!isDraftMeaningful(draft)) return;
+      const curatedCats = draft.selectedCats.filter((c) => c !== '__custom__');
+      const curatedTags = draft.selectedTags.filter((t) => t !== '__custom__');
+      const contentHtml = typeof draft.extra.contentHtml === 'string' && draft.extra.contentHtml ? draft.extra.contentHtml : '<p></p>';
+      fetch('/api/education/blogs', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: draft.title.trim() || 'Brouillon sans titre',
+          description: draft.description.trim() || '—',
+          domain: draft.domain,
+          customDomain: draft.customDomain || undefined,
+          categories: curatedCats.length ? curatedCats : ['NONE'],
+          tags: curatedTags,
+          freeTags: draft.freeTags,
+          freeCategories: draft.freeCategories,
+          content: contentHtml,
+          readingTime: 1,
+        }),
+      }).catch(() => {});
+      clearDraft(DRAFT_KIND);
+    };
+  }, []);
+
+  const tabStyle = (val: 'create' | 'list'): React.CSSProperties => ({
+    padding: '10px 18px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', background: 'none', border: 'none',
+    borderBottom: tab === val ? '2px solid var(--accent)' : '2px solid transparent',
+    color: tab === val ? 'var(--primary)' : 'var(--gray-500, #6b7280)',
+  });
+
+  const goToCreate = () => { setEditing(null); setTab('create'); };
+
+  return (
+    <div>
+      <h1 style={{ fontFamily: 'var(--font-d)', fontSize: '24px', fontWeight: 800, margin: '0 0 4px' }}>Blog</h1>
+      <p style={{ color: 'var(--gray-500, #6b7280)', fontSize: '14px', margin: '0 0 20px' }}>Rédigez et suivez vos articles.</p>
+
+      <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid var(--gray-200, #e5e7eb)', marginBottom: '24px' }}>
+        <button type="button" style={tabStyle('create')} onClick={goToCreate}>{editing ? 'Modifier' : 'Créer'}</button>
+        <button type="button" style={tabStyle('list')} onClick={() => setTab('list')}>Mes blogs</button>
+      </div>
+
+      {tab === 'create'
+        ? <CreateBlogTab key={editing?.id ?? 'new'} editing={editing} onDone={() => { setEditing(null); setTab('list'); }} />
+        : <MyBlogs onEdit={(blog) => { setEditing(blog); setTab('create'); }} />}
+    </div>
+  );
+}

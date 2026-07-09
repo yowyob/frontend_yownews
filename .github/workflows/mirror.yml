@@ -1,0 +1,35 @@
+name: Mirror from source
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+concurrency:
+  group: mirror-frontend_yownews
+  cancel-in-progress: true
+jobs:
+  mirror:
+    if: github.repository == 'yowyob/frontend_yownews'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      UPSTREAM: https://github.com/mayega-git/frontend_yownews.git
+      UPSTREAM_BRANCH: master
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Sync (préserve fichiers de déploiement)
+        env:
+          MIRROR_PUSH_TOKEN: ${{ secrets.UPSTREAM_TOKEN }}
+        run: |
+          git config user.name "yowyob-mirror"
+          git config user.email "mirror@yowyob.local"
+          git remote add upstream "$UPSTREAM"
+          git fetch --quiet upstream "$UPSTREAM_BRANCH"
+          git checkout upstream/"$UPSTREAM_BRANCH" -- . ':!.github' ':!docker-compose.prod.yml' ':!Dockerfile'
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -m "mirror: sync https://github.com/mayega-git/frontend_yownews.git@$UPSTREAM_BRANCH"
+          git push "https://x-access-token:${MIRROR_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main

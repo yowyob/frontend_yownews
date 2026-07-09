@@ -1,0 +1,57 @@
+{
+  "nav": {
+    "blogs": "Blogs",
+    "podcasts": "Podcasts",
+    "courses": "Courses",
+    "forum": "Forum",
+    "about": "About"
+  },
+  "hero": {
+    "badge": "PAN-AFRICAN PLATFORM",
+    "newChip": "NEW",
+    "title1": "Learn.",
+    "title2": "Create.",
+    "title3": "Launch yourself.",
+    "subtitle": "The Pan-African educational platform bringing together blogs, podcasts and courses to accelerate your career and grow your impact.",
+    "ctaPrimary": "Explore content",
+    "ctaSecondary": "Create free account",
+    "reassure1": "✓ Free to start",
+    "reassure2": "✓ Content in French & English",
+    "reassure3": "✓ Active community"
+  },
+  "stats": {
+    "learners": "Active learners",
+    "contents": "Published content",
+    "countries": "African countries",
+    "rating": "Average rating"
+  },
+  "sections": {
+    "blogs": "Latest Articles",
+    "blogsDesc": "Explore articles written by African experts",
+    "podcasts": "Popular Podcasts",
+    "podcastsDesc": "Listen to the best voices from the continent",
+    "courses": "Featured Courses",
+    "coursesDesc": "Learn at your own pace with our training",
+    "features": "Why LestGo?",
+    "testimonials": "They trust us"
+  },
+  "cta": {
+    "title": "Ready to transform your journey?",
+    "subtitle": "Join 8,500+ learners who trust LestGo for their professional development.",
+    "btnPrimary": "Start for free",
+    "btnSecondary": "Learn more"
+  },
+  "footer": {
+    "description": "The Pan-African educational platform to learn, create and launch yourself.",
+    "platform": "Platform",
+    "resources": "Resources",
+    "legal": "Legal",
+    "copyright": "© 2025 LestGo. All rights reserved."
+  },
+  "login": "Sign in",
+  "signup": "Sign up",
+  "readMore": "Read more",
+  "listenNow": "Listen",
+  "startCourse": "Start",
+  "seeAll": "See all"
+}

@@ -1,0 +1,57 @@
+{
+  "nav": {
+    "blogs": "Blogs",
+    "podcasts": "Podcasts",
+    "courses": "Cours",
+    "forum": "Forum",
+    "about": "À propos"
+  },
+  "hero": {
+    "badge": "PLATEFORME PAN-AFRICAINE",
+    "newChip": "NOUVEAU",
+    "title1": "Apprends.",
+    "title2": "Crée.",
+    "title3": "Propulse-toi.",
+    "subtitle": "La plateforme éducative panafricaine qui réunit blogs, podcasts et cours pour propulser votre carrière et développer votre impact.",
+    "ctaPrimary": "Découvrir le contenu",
+    "ctaSecondary": "Créer un compte gratuit",
+    "reassure1": "✓ Gratuit pour commencer",
+    "reassure2": "✓ Contenu en français & anglais",
+    "reassure3": "✓ Communauté active"
+  },
+  "stats": {
+    "learners": "Apprenants actifs",
+    "contents": "Contenus publiés",
+    "countries": "Pays africains",
+    "rating": "Note moyenne"
+  },
+  "sections": {
+    "blogs": "Derniers Articles",
+    "blogsDesc": "Explorez nos articles rédigés par des experts africains",
+    "podcasts": "Podcasts Populaires",
+    "podcastsDesc": "Écoutez les meilleures voix du continent",
+    "courses": "Cours en Vedette",
+    "coursesDesc": "Apprenez à votre rythme avec nos formations",
+    "features": "Pourquoi LestGo ?",
+    "testimonials": "Ils nous font confiance"
+  },
+  "cta": {
+    "title": "Prêt à transformer votre parcours ?",
+    "subtitle": "Rejoignez 8 500+ apprenants qui font confiance à LestGo pour leur développement professionnel.",
+    "btnPrimary": "Commencer gratuitement",
+    "btnSecondary": "En savoir plus"
+  },
+  "footer": {
+    "description": "La plateforme éducative panafricaine pour apprendre, créer et se propulser.",
+    "platform": "Plateforme",
+    "resources": "Ressources",
+    "legal": "Légal",
+    "copyright": "© 2025 LestGo. Tous droits réservés."
+  },
+  "login": "Connexion",
+  "signup": "S'inscrire",
+  "readMore": "Lire la suite",
+  "listenNow": "Écouter",
+  "startCourse": "Commencer",
+  "seeAll": "Voir tout"
+}

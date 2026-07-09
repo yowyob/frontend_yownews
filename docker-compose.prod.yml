@@ -1,0 +1,46 @@
+services:
+  yownews-frontend:
+    image: "${APP_IMAGE:?APP_IMAGE requis}"
+    container_name: yownews-frontend
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: "production"
+      PORT: "3000"
+      KSM_BASE_URL: "https://kernel-core.yowyob.com"
+      KSM_CLIENT_ID: "yownews-frontend"
+      KSM_API_KEY: "1Us9hr52ejC8BDuCJnXsgouAiV2NWkBUeEexdOD4"
+      SESSION_SECRET: "tRE1J3P5ef2IXIt0tMsuSlbs1N2lCmPZdmU4d31FfmJA8CM8"
+      REDIS_HOST: "yownews-redis"
+      REDIS_PORT: "6379"
+    healthcheck:
+      test: ["CMD-SHELL","wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 45s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.yownews.rule=Host(`newsletter.yowyob.com`)"
+      - "traefik.http.routers.yownews.entrypoints=websecure"
+      - "traefik.http.routers.yownews.tls=true"
+      - "traefik.http.routers.yownews.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.yownews.priority=10"
+      - "traefik.http.services.yownews.loadbalancer.server.port=3000"
+      - "traefik.docker.network=yowyob"
+    depends_on:
+      yownews-redis: { condition: service_healthy }
+    networks: [yowyob, yownews-net]
+  yownews-redis:
+    image: redis:7-alpine
+    container_name: yownews-redis
+    restart: unless-stopped
+    command: ["redis-server","--appendonly","yes"]
+    volumes: [yownews-redis-data:/data]
+    healthcheck: { test: ["CMD","redis-cli","ping"], interval: 10s, timeout: 5s, retries: 5 }
+    networks: [yownews-net]
+volumes:
+  yownews-redis-data:
+networks:
+  yowyob: { external: true, name: yowyob }
+  yownews-net: { name: yownews-net }

@@ -1,0 +1,20 @@
+import 'server-only';
+import type { NextRequest } from 'next/server';
+import { handleRoute, fail } from '@/server/api-response';
+import { readSession } from '@/server/session';
+import { isPlatformAdmin } from '@/lib/roles';
+import * as educationApi from '@/server/ksm/modules/education';
+
+// POST /api/admin/courses/{id}/reject — rejette un cours soumis (cascade sur ses unités côté KSM).
+export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return handleRoute(async () => {
+    const session = await readSession();
+    if (!session) return fail(401, 'UNAUTHORIZED', 'Not authenticated');
+    if (!isPlatformAdmin(session.user.permissions ?? session.user.roles)) {
+      return fail(403, 'FORBIDDEN', 'Admin only');
+    }
+
+    const { id } = await params;
+    return educationApi.rejectContent(session, 'courses', id);
+  });
+}
