@@ -1,0 +1,53 @@
+sequenceDiagram
+    autonumber
+    actor L as Lecteur
+    actor A as Admin
+    participant RP as Front /reader/profile
+    participant BFF as BFF (Next /api)
+    participant EDU as KSM education editor-applications
+    participant ADM as KSM administration
+    participant DB as Postgres
+
+    Note over L,DB: 1) Depot de la candidature
+    L->>RP: Remplit le formulaire (domaines, proofUrl, motivation)
+    RP->>BFF: POST /api/role-requests
+    BFF->>EDU: POST /api/v1/education/editor-applications (+ email/nom session)
+    EDU->>EDU: Verifie "1 seule PENDING par user" + valide les domaines
+    EDU->>DB: INSERT editor_application (status=PENDING)
+    DB-->>EDU: id
+    EDU-->>BFF: 201 Created
+    BFF-->>RP: Candidature envoyee
+
+    Note over L,DB: 2) Suivi du statut (Lecteur)
+    L->>RP: Ouvre son profil
+    RP->>BFF: GET /api/role-requests/me
+    BFF->>EDU: GET /editor-applications/me
+    EDU->>DB: SELECT par user_id (contexte courant)
+    DB-->>EDU: candidatures
+    EDU-->>RP: statut (PENDING / APPROVED / REJECTED)
+
+    Note over A,DB: 3) Revue admin
+    A->>BFF: GET /api/admin/role-requests
+    BFF->>EDU: GET /editor-applications?status=PENDING (gate education:content:manage)
+    EDU->>DB: SELECT + filtre tenant
+    DB-->>EDU: liste
+    EDU-->>A: candidatures a traiter
+
+    Note over A,DB: 4a) Validation (assigne le role automatiquement)
+    A->>BFF: POST /api/admin/role-requests/{id}/approve
+    BFF->>ADM: GET /administration/roles -> id role Redacteur
+    BFF->>ADM: POST /administration/users/{userId}/roles (EDUCATION_EDITOR_PERMISSIONS, scope ORGANIZATION)
+    ADM->>DB: INSERT user_role_assignment
+    BFF->>EDU: PATCH /editor-applications/{id}/status (APPROVED)
+    EDU->>DB: findById -> UPDATE status=APPROVED, decided_at/by
+    EDU-->>BFF: 200
+    BFF-->>A: Valide
+    Note right of A: Le Lecteur devient Redacteur -> acces a /editor apres reconnexion
+
+    Note over A,DB: 4b) Refus
+    A->>BFF: POST /api/admin/role-requests/{id}/reject
+    BFF->>EDU: PATCH /editor-applications/{id}/status (REJECTED)
+    EDU->>DB: UPDATE status=REJECTED
+    EDU-->>BFF: 200
+    BFF-->>A: Refuse
+    Note right of A: Aucun role assigne. Le Lecteur peut redeposer une candidature.
