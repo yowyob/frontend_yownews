@@ -1,5 +1,7 @@
 name: Mirror from source
 on:
+  repository_dispatch:
+    types: [upstream-push]
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
