@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter } from '@/i18n/navigation';
 import { apiFetch, BffApiError } from '@/lib/api-client';
 import { useSession } from '@/components/providers/session-provider';
-import { AuthLeftPanel } from '@/components/auth/AuthLeftPanel';
+import { AuthLayout } from '@/components/auth/AuthLayout';
+import { AuthButton, SocialAuthButton } from '@/components/auth/AuthButton';
 import { isPlatformAdmin, isEducationEditor } from '@/lib/roles';
 
 type LoginResult = {
@@ -36,6 +37,17 @@ export default function LoginPage() {
       errs.password = 'Le mot de passe doit comporter au moins 8 caractères.';
     }
     return errs;
+  }
+
+  // Validation au blur : signale l'erreur dès que l'utilisateur quitte un champ invalide,
+  // au lieu d'attendre le submit (heuristique de Nielsen n°9 — prévention des erreurs).
+  function handleBlurEmail() {
+    if (!email) return;
+    setFieldErrors((p) => ({ ...p, email: validate().email }));
+  }
+  function handleBlurPassword() {
+    if (!password) return;
+    setFieldErrors((p) => ({ ...p, password: validate().password }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -103,46 +115,19 @@ export default function LoginPage() {
   const inputBase =
     'w-full px-4 py-3 rounded-[10px] text-[15px] outline-none transition-all duration-200 bg-white';
   const inputStyle = (hasError?: boolean) =>
-    `${inputBase} ${hasError ? 'border-2 border-red-400 shadow-[0_0_0_4px_rgba(239,68,68,.08)]' : 'border-[1.5px] border-gray-200 focus:border-[#1565C0] focus:shadow-[0_0_0_4px_rgba(21,101,192,.08)]'}`;
+    `${inputBase} ${hasError ? 'border-2 border-red-400 shadow-[0_0_0_4px_rgba(239,68,68,.08)]' : 'border-[1.5px] border-gray-200 focus:border-[#1F5FBF] focus:shadow-[0_0_0_4px_rgba(31,95,191,.08)]'}`;
 
   return (
-    <div className="grid min-h-screen" style={{ gridTemplateColumns: '55% 45%' }}>
-      <AuthLeftPanel
-        kicker="Plateforme éducative africaine"
-        headline={
-          <>
-            Rejoins <span style={{ background: 'linear-gradient(90deg,#FF6B35,#FFB347)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>8&nbsp;500+</span>
-            <br />apprenants qui<br />bâtissent l&apos;Afrique
-          </>
-        }
-        sub="Articles, podcasts et cours créés par des experts africains — gratuit, sans engagement."
-      />
-
-      {/* Right panel */}
-      <main
-        className="bg-white flex items-center justify-center px-6 py-12 md:px-14 relative"
-        role="main"
-      >
-        {/* Left border line */}
-        <div
-          className="hidden md:block absolute top-0 left-0 bottom-0 w-px pointer-events-none"
-          style={{ background: 'linear-gradient(180deg,transparent,#E2E8F0 30%,#E2E8F0 70%,transparent)' }}
-        />
-
-        {/* Mobile logo */}
-        <div className="md:hidden absolute top-8 left-1/2 -translate-x-1/2 flex items-center gap-2.5">
-          <div
-            className="w-9 h-9 rounded-[9px] flex items-center justify-center font-display font-extrabold text-sm text-white"
-            style={{ background: 'linear-gradient(135deg,#1565C0,#FF6B35)' }}
-          >
-            YN
-          </div>
-          <span className="font-display text-xl font-extrabold">
-            <span className="text-[#0F3460]">Yow</span>
-            <span style={{ color: '#FF6B35' }}>News</span>
-          </span>
-        </div>
-
+    <AuthLayout
+      headline={
+        <>
+          Rejoins <span style={{ color: '#FF6B35' }}>8&nbsp;500+</span>
+          <br />apprenants qui<br />bâtissent l&apos;Afrique
+        </>
+      }
+      sub="Articles, podcasts et cours créés par des experts africains — gratuit, sans engagement."
+      showTestimonial={false}
+    >
         <div className="w-full max-w-[400px]">
           {orgStep ? (
             <div>
@@ -166,12 +151,9 @@ export default function LoginPage() {
                     type="button"
                     disabled={loading}
                     onClick={() => handleSelectOrg(org.organizationId)}
-                    className="flex items-center gap-3 w-full text-left px-4 py-3.5 rounded-[10px] border-[1.5px] border-gray-200 bg-white transition-all duration-200 hover:border-[#1565C0] hover:shadow-[0_0_0_4px_rgba(21,101,192,.08)] disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="flex items-center gap-3 w-full text-left px-4 py-3.5 rounded-[10px] border-[1.5px] border-gray-200 bg-white transition-all duration-200 hover:border-[#1F5FBF] hover:shadow-[0_0_0_4px_rgba(31,95,191,.08)] disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <span
-                      className="w-10 h-10 rounded-[9px] flex items-center justify-center font-display font-bold text-sm text-white shrink-0"
-                      style={{ background: 'linear-gradient(135deg,#1565C0,#FF6B35)' }}
-                    >
+                    <span className="w-10 h-10 rounded-[9px] flex items-center justify-center font-display font-bold text-sm text-white shrink-0 bg-[#1F5FBF]">
                       {org.displayName.slice(0, 2).toUpperCase()}
                     </span>
                     <span className="min-w-0">
@@ -187,7 +169,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => { setOrgStep(null); setGlobalError(null); }}
-                className="mt-6 text-sm text-[#1565C0] font-medium hover:text-[#FF6B35] transition-colors"
+                className="mt-6 text-sm text-[#1F5FBF] font-medium hover:text-[#FF6B35] transition-colors"
               >
                Utiliser un autre compte
               </button>
@@ -201,7 +183,7 @@ export default function LoginPage() {
             </h2>
             <p className="text-[15px] text-[#64748B]">
               Pas encore de compte ?{' '}
-              <Link href="/auth/sign-up" className="text-[#1565C0] font-semibold hover:text-[#FF6B35] transition-colors">
+              <Link href="/auth/sign-up" className="text-[#1F5FBF] font-semibold hover:text-[#FF6B35] transition-colors">
                 Créer un compte gratuit
               </Link>
             </p>
@@ -230,16 +212,7 @@ export default function LoginPage() {
                 ),
               },
             ].map(({ label, icon }) => (
-              <button
-                key={label}
-                type="button"
-                disabled
-                className="flex items-center justify-center gap-2.5 py-[11px] px-5 rounded-[10px] border-[1.5px] border-gray-200 bg-white text-sm font-medium text-[#0F172A] transition-all duration-200 hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                aria-label={`Continuer avec ${label}`}
-              >
-                {icon}
-                {label}
-              </button>
+              <SocialAuthButton key={label} label={label} icon={icon} />
             ))}
           </div>
 
@@ -278,6 +251,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: undefined })); }}
+                  onBlur={handleBlurEmail}
                   placeholder="votre@email.com"
                   autoComplete="email"
                   required
@@ -303,7 +277,7 @@ export default function LoginPage() {
                 <label className="font-display text-[13px] font-semibold text-[#0F172A]" htmlFor="password">
                   Mot de passe
                 </label>
-                <a href="#" className="text-[13px] text-[#1565C0] font-medium hover:text-[#FF6B35] transition-colors">
+                <a href="#" className="text-[13px] text-[#1F5FBF] font-medium hover:text-[#FF6B35] transition-colors">
                   Mot de passe oublié ?
                 </a>
               </div>
@@ -318,6 +292,7 @@ export default function LoginPage() {
                   type={showPwd ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); if (fieldErrors.password) setFieldErrors((p) => ({ ...p, password: undefined })); }}
+                  onBlur={handleBlurPassword}
                   placeholder="••••••••"
                   autoComplete="current-password"
                   required
@@ -329,8 +304,9 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPwd((v) => !v)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1565C0] transition-colors p-1 rounded"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1F5FBF] transition-colors p-1 rounded"
                   aria-label="Afficher/masquer le mot de passe"
+                  aria-pressed={showPwd}
                 >
                   {showPwd ? (
                     <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -355,35 +331,15 @@ export default function LoginPage() {
             </div>
 
             {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 rounded-[10px] text-white font-display text-base font-bold transition-all duration-300 relative overflow-hidden disabled:opacity-80"
-              style={{
-                background: loading ? '#FF6B35' : '#FF6B35',
-                boxShadow: loading ? 'none' : undefined,
-              }}
-              onMouseEnter={(e) => { if (!loading) { (e.currentTarget as HTMLButtonElement).style.background = '#E55A2B'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 8px 32px rgba(255,107,53,.4)'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; } }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#FF6B35'; (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none'; (e.currentTarget as HTMLButtonElement).style.transform = 'none'; }}
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                  </svg>
-                  Connexion en cours…
-                </span>
-              ) : (
-                'Se connecter'
-              )}
-            </button>
+            <AuthButton type="submit" loading={loading}>
+              {loading ? 'Connexion en cours…' : 'Se connecter'}
+            </AuthButton>
           </form>
 
           {/* Register link */}
           <p className="text-center mt-6 text-sm text-[#64748B]">
-            Nouveau sur YowNews ?{' '}
-            <Link href="/auth/sign-up" className="text-[#1565C0] font-semibold hover:text-[#FF6B35] transition-colors">
+            Nouveau sur YowYob Education ?{' '}
+            <Link href="/auth/sign-up" className="text-[#1F5FBF] font-semibold hover:text-[#FF6B35] transition-colors">
               Créer un compte gratuit 
             </Link>
           </p>
@@ -391,14 +347,13 @@ export default function LoginPage() {
           {/* Terms */}
           <p className="text-center mt-5 text-xs text-gray-400 leading-relaxed">
             En vous connectant, vous acceptez nos{' '}
-            <a href="#" className="text-gray-500 underline hover:text-[#1565C0] transition-colors">Conditions d&apos;utilisation</a>{' '}
+            <a href="#" className="text-gray-500 underline hover:text-[#1F5FBF] transition-colors">Conditions d&apos;utilisation</a>{' '}
             et notre{' '}
-            <a href="#" className="text-gray-500 underline hover:text-[#1565C0] transition-colors">Politique de confidentialité</a>.
+            <a href="#" className="text-gray-500 underline hover:text-[#1F5FBF] transition-colors">Politique de confidentialité</a>.
           </p>
           </>
           )}
         </div>
-      </main>
-    </div>
+    </AuthLayout>
   );
 }

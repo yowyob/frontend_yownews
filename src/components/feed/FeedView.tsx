@@ -4,6 +4,9 @@ import { usePathname } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api-client';
 import ContentFeedCard, { type FeedItem } from './ContentFeedCard';
 import PodcastFeedCard from './PodcastFeedCard';
+import FeaturedCarousel from './FeaturedCarousel';
+
+const FEATURED_COUNT = 5;
 
 const FEED_PATH: Record<'BLOG' | 'PODCAST' | 'COURSE', string> = {
   BLOG: '/api/feed/blogs',
@@ -31,6 +34,9 @@ export default function FeedView({ contentType }: { contentType: 'BLOG' | 'PODCA
         ? '/admin'
         : '/public';
   const [items, setItems] = useState<FeedItem[] | null>(null);
+  // Le bandeau "à la une" charge les contenus les plus likés (tri agrégé côté BFF, cf.
+  // /api/feed/blogs?sort=liked) — indépendant du fil principal, trié par date de publication.
+  const [featured, setFeatured] = useState<FeedItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
@@ -38,12 +44,20 @@ export default function FeedView({ contentType }: { contentType: 'BLOG' | 'PODCA
     let cancelled = false;
     (async () => {
       setItems(null);
+      setFeatured([]);
       setError(null);
       try {
         const data = await apiFetch<FeedItem[]>(`${FEED_PATH[contentType]}?limit=20`);
         if (!cancelled) setItems(Array.isArray(data) ? data : []);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur de chargement du fil');
+      }
+      // Les cours ne supportent pas encore le tri par popularité côté BFF — dégrade
+      // silencieusement vers "pas de bandeau" plutôt que de planter le fil principal.
+      if (contentType !== 'COURSE') {
+        apiFetch<FeedItem[]>(`${FEED_PATH[contentType]}?limit=${FEATURED_COUNT}&sort=liked`)
+          .then((data) => { if (!cancelled) setFeatured(Array.isArray(data) ? data : []); })
+          .catch(() => {});
       }
     })();
     return () => { cancelled = true; };
@@ -71,8 +85,11 @@ export default function FeedView({ contentType }: { contentType: 'BLOG' | 'PODCA
     });
   };
 
+  const featuredIds = new Set(featured.map((it) => it.id));
+  const rest = (items ?? []).filter((it) => !featuredIds.has(it.id));
+
   return (
-    <div style={{ maxWidth: '920px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1180px', margin: '0 auto' }}>
       <div style={{ marginBottom: '20px' }}>
         <h1 style={{ fontFamily: 'var(--font-d)', fontSize: '24px', fontWeight: 800, margin: 0 }}>{FEED_TITLE[contentType]}</h1>
       </div>
@@ -93,8 +110,10 @@ export default function FeedView({ contentType }: { contentType: 'BLOG' | 'PODCA
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '18px' }}>
-        {items?.map((it) =>
+      {featured.length > 0 && <FeaturedCarousel items={featured} spacePrefix={spacePrefix} />}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '16px' }}>
+        {rest.map((it) =>
           it.contentType?.toUpperCase() === 'PODCAST' ? (
             <PodcastFeedCard
               key={`${it.contentType}-${it.id}`}

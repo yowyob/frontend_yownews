@@ -17,8 +17,8 @@ export function Header() {
   return (
     <header className="lv-nav">
       <div className="lv-container lv-nav-inner">
-        <Link href="/" className="lv-brand" aria-label="YowNews">
-          <span className="lv-logo" aria-hidden="true">YN</span> YowNews
+        <Link href="/" className="lv-brand" aria-label="Yowyob Education">
+          <span className="lv-logo" aria-hidden="true">YE</span> Yowyob Education
         </Link>
         <div className="lv-nav-links">
           <Link href="/public/blogs">Blogs</Link>

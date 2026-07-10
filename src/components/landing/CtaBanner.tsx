@@ -8,7 +8,7 @@ export function CtaBanner() {
           <h2 id="cta-h2">Prêt à transformer votre apprentissage ?</h2>
           <p>
             Rejoignez des milliers d&apos;apprenants camerounais qui développent leurs compétences
-            chaque jour sur YowNews, gratuitement.
+            chaque jour sur Yowyob Education, gratuitement.
           </p>
           <div className="ctas">
             <Link href="/auth/sign-up" className="lv-btn lv-btn-orange">

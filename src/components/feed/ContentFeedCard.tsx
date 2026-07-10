@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api-client';
 import { coverPathFor, feedSegmentFor } from './contentLinks';
+import CoverFallback from './CoverFallback';
 
 export type FeedItem = {
   id: string;
@@ -14,6 +15,9 @@ export type FeedItem = {
   freeTags?: string[] | null;
   publishedAt?: string | null;
   listenCount?: number | null;
+  // Cover fixe (ex: contenu statique de la landing) — prioritaire sur coverPathFor() qui
+  // pointe vers un endpoint authentifié inutilisable pour du contenu hors backend.
+  coverUrl?: string | null;
 };
 
 const DOMAIN_COLORS: Record<string, { bg: string; text: string }> = {
@@ -104,10 +108,12 @@ export default function ContentFeedCard({
     >
       {/* Image avec overlay + badges */}
       <div style={{ position: 'relative', height: '200px', background: 'var(--gray-100, #f3f4f6)', overflow: 'hidden' }}>
-        {!coverFailed && (
+        {coverFailed ? (
+          <CoverFallback id={item.id} title={item.title} contentType={item.contentType} />
+        ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={coverPathFor(item.contentType, item.id)}
+            src={item.coverUrl || coverPathFor(item.contentType, item.id)}
             alt=""
             onError={() => setCoverFailed(true)}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}

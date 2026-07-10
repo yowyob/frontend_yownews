@@ -144,7 +144,7 @@ export default function NewsletterSubscriptions({ email: initialEmail }: { email
                 transition: 'border-color 0.2s',
                 fontFamily: 'inherit',
               }}
-              onFocus={(e) => (e.target.style.borderColor = '#1565C0')}
+              onFocus={(e) => (e.target.style.borderColor = '#1F5FBF')}
               onBlur={(e) => (e.target.style.borderColor = '#e2e8f0')}
             />
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" style={{ position: 'absolute', left: '14px' }}>
@@ -172,9 +172,9 @@ export default function NewsletterSubscriptions({ email: initialEmail }: { email
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '8px',
-                  border: isSub ? '1.5px solid #1565C0' : '1.5px solid #e2e8f0',
+                  border: isSub ? '1.5px solid #1F5FBF' : '1.5px solid #e2e8f0',
                   background: isSub ? '#eff6ff' : '#ffffff',
-                  color: isSub ? '#1565C0' : '#475569',
+                  color: isSub ? '#1F5FBF' : '#475569',
                   borderRadius: '24px',
                   padding: '8px 16px',
                   fontSize: '13.5px',
@@ -186,7 +186,7 @@ export default function NewsletterSubscriptions({ email: initialEmail }: { email
                 }}
                 onMouseEnter={(e) => {
                   if (!isSub && !loading) {
-                    e.currentTarget.style.borderColor = '#1565C0';
+                    e.currentTarget.style.borderColor = '#1F5FBF';
                     e.currentTarget.style.background = '#f8fafc';
                   }
                 }}
@@ -257,7 +257,7 @@ export default function NewsletterSubscriptions({ email: initialEmail }: { email
                       width: '32px',
                       height: '32px',
                       borderRadius: '50%',
-                      background: 'linear-gradient(135deg, #1565C0, #ff6b35)',
+                      background: '#1F5FBF',
                       color: '#ffffff',
                       display: 'flex',
                       alignItems: 'center',

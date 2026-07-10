@@ -7,7 +7,7 @@ export function Footer() {
         <div className="lv-footer-grid">
           <div>
             <div className="lv-brand" style={{ color: '#fff', marginBottom: 14 }}>
-              <span className="lv-logo" aria-hidden="true">YN</span> YowNews
+              <span className="lv-logo" aria-hidden="true">YE</span> Yowyob Education
             </div>
             <p style={{ maxWidth: 320 }}>
               La plateforme de contenu éducatif du Cameroun. Blogs, podcasts, cours et communauté
@@ -39,7 +39,7 @@ export function Footer() {
             </ul>
           </div>
         </div>
-        <div className="bot">© 2025 YowNews. Cameroun.</div>
+        <div className="bot">© 2025 Yowyob Education. Cameroun.</div>
       </div>
     </footer>
   );

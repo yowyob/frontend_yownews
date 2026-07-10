@@ -173,7 +173,8 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
   }
 
   const card: React.CSSProperties = {
-    background: '#fff', border: '1px solid var(--gray-200)', borderRadius: 14, padding: 24,
+    background: '#fff', border: '1px solid var(--gray-100)', borderRadius: 14, padding: 24,
+    boxShadow: '0 1px 3px rgba(0,0,0,.04)',
   };
   const input: React.CSSProperties = {
     width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--gray-300)',
@@ -184,13 +185,13 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
       {/* En-tête profil */}
       <div style={{ ...card, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg,#1565C0,#7C3AED)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: 22, flexShrink: 0 }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: 22, flexShrink: 0 }}>
             {initials(displayName)}
           </div>
           <div style={{ minWidth: 0 }}>
             <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--primary)', margin: 0 }}>{displayName}</h1>
             <div style={{ color: 'var(--gray-500)', fontSize: 14 }}>{email}</div>
-            <span style={{ display: 'inline-block', marginTop: 6, padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: isEditor ? '#F5F0FF' : 'var(--gray-100)', color: isEditor ? '#7C3AED' : 'var(--gray-600)' }}>
+            <span style={{ display: 'inline-block', marginTop: 6, padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: isEditor ? 'rgba(255,107,53,.12)' : 'var(--gray-100)', color: isEditor ? 'var(--accent)' : 'var(--gray-600)' }}>
               {roleLabel}
             </span>
           </div>

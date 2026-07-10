@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import ContentEditor from '@/components/content-editor/ContentEditor';
+import RichTextField, { useRichTextEditor } from '@/components/content-editor/RichTextField';
+import Select from '@/components/content-editor/Select';
 import type { ContentTypeConfig, ExtraBodyResult, InitialContent } from '@/components/content-editor/types';
 import { clearDraft, isDraftMeaningful, loadDraft } from '@/components/content-editor/draftCache';
 import RowMenu from '@/components/education/RowMenu';
@@ -56,7 +58,8 @@ function CreateContentTab({ kind, editing, onDone }: { kind: WorkspaceKind; edit
   const [trainerName, setTrainerName] = useState(editing?.trainerName ?? '');
   const [duration, setDuration] = useState(editing?.duration ?? '');
   const [level, setLevel] = useState(editing?.level ?? 'beginner');
-  const [transcript, setTranscript] = useState(editing?.transcript ?? '');
+  // Toujours appelé (règle des hooks) même pour les cours, où il n'est simplement pas utilisé.
+  const transcriptEditor = useRichTextEditor({ content: editing?.transcript ?? '', placeholder: "Transcrivez l'épisode…" });
 
   const config: ContentTypeConfig = {
     noun: meta.noun,
@@ -76,18 +79,19 @@ function CreateContentTab({ kind, editing, onDone }: { kind: WorkspaceKind; edit
         </div>
         <div>
           <label style={fieldLabel}>Niveau</label>
-          <select style={fieldInput} value={level} onChange={(e) => setLevel(e.target.value)}>
-            <option value="beginner">Débutant</option>
-            <option value="intermediate">Intermédiaire</option>
-            <option value="advanced">Avancé</option>
-          </select>
+          <Select
+            value={level}
+            onChange={setLevel}
+            options={[
+              { value: 'beginner', label: 'Débutant' },
+              { value: 'intermediate', label: 'Intermédiaire' },
+              { value: 'advanced', label: 'Avancé' },
+            ]}
+          />
         </div>
       </div>
     ) : (
-      <div>
-        <label style={fieldLabel}>Transcription</label>
-        <textarea style={{ ...fieldInput, minHeight: '160px', resize: 'vertical' }} value={transcript} onChange={(e) => setTranscript(e.target.value)} placeholder="Transcription de l'audio" />
-      </div>
+      <RichTextField editor={transcriptEditor} label="Transcription" />
     ),
     buildExtraBody: (): ExtraBodyResult => {
       if (kind === 'courses') {
@@ -95,12 +99,13 @@ function CreateContentTab({ kind, editing, onDone }: { kind: WorkspaceKind; edit
         if (!duration.trim()) return { ok: false, error: 'La durée est requise.' };
         return { ok: true, body: { trainerName: trainerName.trim(), duration: duration.trim(), level } };
       }
-      if (!transcript.trim()) return { ok: false, error: 'La transcription est requise.' };
-      return { ok: true, body: { transcript: transcript.trim() } };
+      const transcriptText = transcriptEditor?.getText() ?? '';
+      if (!transcriptText.trim()) return { ok: false, error: 'La transcription est requise.' };
+      return { ok: true, body: { transcript: transcriptEditor?.getHTML() ?? '' } };
     },
-    resetExtra: () => { setTrainerName(''); setDuration(''); setLevel('beginner'); setTranscript(''); },
+    resetExtra: () => { setTrainerName(''); setDuration(''); setLevel('beginner'); transcriptEditor?.commands.clearContent(); },
     draftKey: kind,
-    getDraftExtra: () => kind === 'courses' ? { trainerName, duration, level } : { transcript },
+    getDraftExtra: () => kind === 'courses' ? { trainerName, duration, level } : { transcriptHtml: transcriptEditor?.getHTML() ?? '' },
   };
 
   const onDraftRestored = (extra: Record<string, unknown>) => {
@@ -108,8 +113,8 @@ function CreateContentTab({ kind, editing, onDone }: { kind: WorkspaceKind; edit
       if (typeof extra.trainerName === 'string') setTrainerName(extra.trainerName);
       if (typeof extra.duration === 'string') setDuration(extra.duration);
       if (typeof extra.level === 'string') setLevel(extra.level);
-    } else if (typeof extra.transcript === 'string') {
-      setTranscript(extra.transcript);
+    } else if (typeof extra.transcriptHtml === 'string' && extra.transcriptHtml) {
+      transcriptEditor?.commands.setContent(extra.transcriptHtml);
     }
   };
 
@@ -131,7 +136,7 @@ function CreateContentTab({ kind, editing, onDone }: { kind: WorkspaceKind; edit
   return (
     <div>
       {editing && (
-        <div style={{ marginBottom: '14px', fontSize: '13px', color: 'var(--gray-500, #6b7280)' }}>
+        <div style={{ maxWidth: '760px', margin: '0 auto 14px', fontSize: '13px', color: 'var(--gray-500, #6b7280)' }}>
           Modification de « {editing.title} » — <button type="button" onClick={onDone} style={{ border: 'none', background: 'none', color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}>annuler</button>
         </div>
       )}
@@ -217,10 +222,11 @@ function MyContent({ kind, onEdit }: { kind: WorkspaceKind; onEdit: (item: Conte
 
   const tabBtn = (val: 'DRAFT' | 'SUBMITTED' | 'PUBLISHED', labelText: string) => (
     <button type="button" onClick={() => setFilter(val)} style={{
-      padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-      border: '1px solid var(--gray-200, #e5e7eb)',
-      background: filter === val ? 'var(--primary)' : '#fff',
+      padding: '8px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+      border: `1px solid ${filter === val ? 'var(--accent)' : 'var(--gray-200, #e5e7eb)'}`,
+      background: filter === val ? 'var(--accent)' : '#fff',
       color: filter === val ? '#fff' : 'var(--gray-700, #374151)',
+      transition: 'all .15s',
     }}>{labelText}</button>
   );
 
@@ -239,7 +245,7 @@ function MyContent({ kind, onEdit }: { kind: WorkspaceKind; onEdit: (item: Conte
       )}
 
       {list && list.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '12px', overflow: 'visible' }}>
+        <div style={{ background: '#fff', border: '1px solid var(--gray-100, #f3f4f6)', borderRadius: '14px', overflow: 'visible', boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
             <thead>
               <tr style={{ background: 'var(--gray-50, #f9fafb)', textAlign: 'left' }}>
@@ -253,7 +259,12 @@ function MyContent({ kind, onEdit }: { kind: WorkspaceKind; onEdit: (item: Conte
             </thead>
             <tbody>
               {list.map((b) => (
-                <tr key={b.id} style={{ borderTop: '1px solid var(--gray-100, #f3f4f6)' }}>
+                <tr
+                  key={b.id}
+                  style={{ borderTop: '1px solid var(--gray-100, #f3f4f6)', transition: 'background .12s' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--gray-50, #f9fafb)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
                   <td style={{ padding: '12px 16px', fontWeight: 600 }}>{b.title}</td>
                   <td style={{ padding: '12px 16px' }}><StatusBadge status={b.status} /></td>
                   <td style={{ padding: '12px 16px', color: 'var(--gray-500, #6b7280)' }}>{b.domain === 'NONE' ? '—' : b.domain}</td>
@@ -305,9 +316,10 @@ export default function ContentWorkspace({ kind }: { kind: WorkspaceKind }) {
       if (!isDraftMeaningful(draft)) return;
       const trainerName = typeof draft.extra.trainerName === 'string' ? draft.extra.trainerName.trim() : '';
       const duration = typeof draft.extra.duration === 'string' ? draft.extra.duration.trim() : '';
-      const transcript = typeof draft.extra.transcript === 'string' ? draft.extra.transcript.trim() : '';
+      const transcriptHtml = typeof draft.extra.transcriptHtml === 'string' ? draft.extra.transcriptHtml : '';
+      const transcriptHasText = transcriptHtml.replace(/<[^>]*>/g, '').trim().length > 0;
       if (kind === 'courses' && (!trainerName || !duration)) return;
-      if (kind === 'podcasts' && !transcript) return;
+      if (kind === 'podcasts' && !transcriptHasText) return;
 
       const curatedCats = draft.selectedCats.filter((c) => c !== '__custom__');
       const curatedTags = draft.selectedTags.filter((t) => t !== '__custom__');
@@ -326,7 +338,7 @@ export default function ContentWorkspace({ kind }: { kind: WorkspaceKind }) {
           freeCategories: draft.freeCategories,
           ...(kind === 'courses'
             ? { trainerName, duration, level: typeof draft.extra.level === 'string' ? draft.extra.level : 'beginner' }
-            : { transcript }),
+            : { transcript: transcriptHtml }),
         }),
       }).catch(() => {});
       clearDraft(kind);

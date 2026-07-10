@@ -34,7 +34,7 @@ export const LANDING_CSS = `
 .lv-hero-carousel{position:absolute;inset:0;z-index:0}
 .lv-hero-slide{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.2s ease-in-out;filter:grayscale(100%) brightness(35%) contrast(110%)}
 .lv-hero-slide.is-active{opacity:1}
-.lv-hero-overlay{position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(31,95,191,.94) 0%,rgba(31,95,191,.66) 45%,rgba(15,58,122,.35) 100%)}
+.lv-hero-overlay{position:absolute;inset:0;z-index:1;background:rgba(31,95,191,.82)}
 .lv-hero .lv-container{position:relative;z-index:2;padding-top:96px;padding-bottom:96px;width:100%}
 .lv-tag{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:rgba(255,255,255,.18);color:#fff;font-size:13px;font-weight:600;backdrop-filter:blur(6px)}
 .lv-tag.light{background:rgba(255,107,53,.18);color:#ffb380}

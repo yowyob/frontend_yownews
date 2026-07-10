@@ -18,7 +18,7 @@ export default function OrgPublisherPage() {
   const [displayName, setDisplayName] = useState('');
 
   const activeOrgId = workspace?.organizationId;
-  const isPlatformOrg = workspace?.organizationCode === (process.env.NEXT_PUBLIC_KSM_PLATFORM_ORG_CODE || 'YOWNEWS');
+  const isPlatformOrg = workspace?.organizationCode === (process.env.NEXT_PUBLIC_KSM_PLATFORM_ORG_CODE || 'YOWYOB_EDU');
 
   useEffect(() => {
     if (workspace) {
@@ -71,8 +71,9 @@ export default function OrgPublisherPage() {
 
   if (!workspace) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
+        <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '3px solid var(--gray-200)', borderBottomColor: 'var(--accent)', animation: 'spin .7s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -81,19 +82,23 @@ export default function OrgPublisherPage() {
     return (
       <div style={{ maxWidth: '600px', margin: '40px auto', padding: '24px' }}>
         <div style={{
-          background: 'rgba(255,255,255,0.05)',
-          backdropFilter: 'blur(10px)',
+          background: '#fff',
           borderRadius: '16px',
-          border: '1px solid rgba(255,255,255,0.1)',
+          border: '1px solid var(--gray-100, #f3f4f6)',
           padding: '32px',
           textAlign: 'center',
-          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
+          boxShadow: '0 1px 3px rgba(0,0,0,.04)',
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏢</div>
-          <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--dark, #fff)', marginBottom: '12px' }}>
+          <div style={{
+            width: '56px', height: '56px', borderRadius: '14px', background: 'var(--primary)', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px',
+          }}>
+            <svg width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 21V7l9-4 9 4v14M9 21V11h6v10"/></svg>
+          </div>
+          <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--dark, #111827)', marginBottom: '12px' }}>
             Sélectionnez votre Organisation
           </h2>
-          <p style={{ fontSize: '14px', color: 'var(--gray-600, #9ca3af)', lineHeight: '1.6' }}>
+          <p style={{ fontSize: '14px', color: 'var(--gray-500)', lineHeight: '1.6' }}>
             Vous êtes actuellement dans l'espace général de lecture. Veuillez basculer vers le contexte de votre organisation externe à l'aide du sélecteur d'espace situé en haut de la page pour pouvoir demander le statut d'organisation éditrice.
           </p>
         </div>
@@ -106,12 +111,12 @@ export default function OrgPublisherPage() {
       <div style={{
         background: '#fff',
         borderRadius: '16px',
-        border: '1px solid var(--gray-200, #e5e7eb)',
+        border: '1px solid var(--gray-100, #f3f4f6)',
         padding: '32px',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+        boxShadow: '0 1px 3px rgba(0,0,0,.04)',
       }}>
         <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
-          Statut Organisation Éditrice YowNews
+          Statut Organisation Éditrice YowYob Education
         </h1>
         <p style={{ fontSize: '14px', color: '#64748B', marginBottom: '24px', lineHeight: '1.5' }}>
           Demandez l'autorisation de publier des articles, podcasts et formations au nom de votre organisation <strong>{workspace.organizationName}</strong>.
@@ -119,7 +124,7 @@ export default function OrgPublisherPage() {
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+            <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '3px solid var(--gray-200)', borderBottomColor: 'var(--accent)', animation: 'spin .7s linear infinite' }} />
           </div>
         ) : request ? (
           <div>
@@ -131,12 +136,14 @@ export default function OrgPublisherPage() {
                 padding: '20px',
                 textAlign: 'center'
               }}>
-                <span style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}>✅</span>
+                <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#10B981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                  <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+                </div>
                 <h3 style={{ color: '#065F46', fontWeight: 700, fontSize: '16px', marginBottom: '6px' }}>
                   Organisation Éditrice Approuvée
                 </h3>
                 <p style={{ color: '#047857', fontSize: '13px', lineHeight: '1.5' }}>
-                  Votre organisation a le statut d'organisation éditrice. Vous pouvez créer, valider et publier des contenus sur YowNews au nom de <strong>{request.displayName || request.orgCode}</strong>.
+                  Votre organisation a le statut d'organisation éditrice. Vous pouvez créer, valider et publier des contenus sur YowYob Education au nom de <strong>{request.displayName || request.orgCode}</strong>.
                 </p>
               </div>
             )}
@@ -149,7 +156,9 @@ export default function OrgPublisherPage() {
                 padding: '20px',
                 textAlign: 'center'
               }}>
-                <span style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}>⏳</span>
+                <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#3B82F6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                  <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                </div>
                 <h3 style={{ color: '#1E3A8A', fontWeight: 700, fontSize: '16px', marginBottom: '6px' }}>
                   Demande en cours d'examen
                 </h3>
@@ -166,7 +175,9 @@ export default function OrgPublisherPage() {
                 borderRadius: '12px',
                 padding: '20px'
               }}>
-                <span style={{ fontSize: '32px', display: 'block', marginBottom: '8px', textAlign: 'center' }}>❌</span>
+                <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#EF4444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                  <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </div>
                 <h3 style={{ color: '#991B1B', fontWeight: 700, fontSize: '16px', marginBottom: '6px', textAlign: 'center' }}>
                   Demande Refusée
                 </h3>
@@ -197,8 +208,7 @@ export default function OrgPublisherPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="btn btn-orange w-full"
-                    style={{ background: 'var(--primary, #FF6B35)', color: '#fff', fontWeight: 600, padding: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                    style={{ width: '100%', background: 'var(--accent)', color: '#fff', fontWeight: 600, padding: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
                   >
                     {submitting ? 'Envoi...' : 'Soumettre à nouveau la demande'}
                   </button>
@@ -214,12 +224,14 @@ export default function OrgPublisherPage() {
                 padding: '20px',
                 textAlign: 'center'
               }}>
-                <span style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}>🚫</span>
+                <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#F59E0B', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                  <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/></svg>
+                </div>
                 <h3 style={{ color: '#78350F', fontWeight: 700, fontSize: '16px', marginBottom: '6px' }}>
                   Statut Suspendu
                 </h3>
                 <p style={{ color: '#B45309', fontSize: '13px', lineHeight: '1.5' }}>
-                  Le statut d'organisation éditrice pour <strong>{request.displayName}</strong> a été suspendu par les administrateurs de la plateforme YowNews. Vos membres ne peuvent temporairement plus publier de contenu. Veuillez contacter le support.
+                  Le statut d'organisation éditrice pour <strong>{request.displayName}</strong> a été suspendu par les administrateurs de la plateforme YowYob Education. Vos membres ne peuvent temporairement plus publier de contenu. Veuillez contacter le support.
                 </p>
               </div>
             )}
@@ -240,7 +252,7 @@ export default function OrgPublisherPage() {
             </div>
             <div style={{ marginBottom: '24px' }}>
               <label style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '6px', color: '#1E293B' }}>
-                Nom d'affichage YowNews
+                Nom d'affichage YowYob Education
               </label>
               <input
                 type="text"

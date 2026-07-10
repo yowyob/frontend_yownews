@@ -2,11 +2,10 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { handleRoute, fail, ok } from '@/server/api-response';
 import * as authApi from '@/server/ksm/modules/auth';
-import { inviteEmployee } from '@/server/ksm/modules/organization';
-import { getAdminSession, provisionReaderRoles } from '@/server/ksm/admin-session';
-import { resolvePlatformOrganizationId } from '@/server/ksm/platform-org';
+import { provisionReaderRoles } from '@/server/ksm/admin-session';
 import { writeSession } from '@/server/session';
 import { logger } from '@/server/logger';
+import { HttpError } from '@/lib/types/api';
 import type { AppSession } from '@/lib/types/auth';
 
 export async function POST(request: NextRequest) {
@@ -53,9 +52,9 @@ export async function POST(request: NextRequest) {
         return fail(404, 'ORG_NOT_FOUND', "L'organisation n'existe pas dans KSM. Inscription en tant que particulier requise.");
       }
     } else {
-      discovery = await authApi.discoverSignUpContexts('YOWNEWS');
+      discovery = await authApi.discoverSignUpContexts('YOWYOB_EDU');
       if (!discovery || !discovery.contexts || !discovery.contexts.length) {
-        return fail(404, 'ORG_NOT_FOUND', 'YowNews organisation not found. Contact support.');
+        return fail(404, 'ORG_NOT_FOUND', 'Yowyob Education organisation not found. Contact support.');
       }
     }
 
@@ -125,22 +124,54 @@ export async function POST(request: NextRequest) {
       );
     } else {
       // Particulier — comportement classique de création de compte
-      const registered = await authApi.signUp({
-        signUpSelectionToken: discovery.selectionToken,
-        contextId: ctx.contextId,
-        firstName,
-        lastName,
-        username,
-        email,
-        password,
-        phoneNumber:  body.phoneNumber,
-        accountType,
-        businessType: body.businessType,
-      });
 
-      // Rattache le compte à l'organisation YowNews (best-effort, ne bloque jamais
-      // l'inscription — cf. plan "particuliers → org YowNews").
-      await attachToYowNewsOrganization({ email, firstName, lastName, phoneNumber: body.phoneNumber });
+      // Pré-check best-effort : /api/auth/identify est cross-tenant (KSM ne filtre pas par
+      // tenant sur cet endpoint), donc un accountExists:true peut correspondre à un compte
+      // dans un tout autre tenant que Yowyob Education — indicatif seulement, jamais garanti à 100 %.
+      // Un échec de ce check ne doit jamais bloquer l'inscription.
+      try {
+        const identify = await authApi.identifyAccount(email);
+        if (identify.accountExists) {
+          return fail(
+            409,
+            'ACCOUNT_MAY_EXIST',
+            'Un compte existe peut-être déjà avec cet email. Essayez de vous connecter, ou contactez le support si vous pensez qu\'il s\'agit d\'une erreur.',
+          );
+        }
+      } catch (err) {
+        logger.warn({ err, email }, 'auth.sign_up.identify_check_failed');
+      }
+
+      let registered: authApi.SignUpResult;
+      try {
+        registered = await authApi.signUp({
+          signUpSelectionToken: discovery.selectionToken,
+          contextId: ctx.contextId,
+          firstName,
+          lastName,
+          username,
+          email,
+          password,
+          phoneNumber:  body.phoneNumber,
+          accountType,
+          businessType: body.businessType,
+        });
+      } catch (err) {
+        // Dégradation propre : KSM peut renvoyer un 500 non explicite pour un cas non géré
+        // (ex. un Actor existe déjà pour cet email sans compte associé — connu, non corrigé
+        // ici par contrainte de périmètre, cf. ADMIN_EDITOR_CONTEXT.md §18.3). Le pré-check
+        // ci-dessus n'a rien détecté : on masque le message technique brut par un message
+        // générique exploitable, plutôt que de le laisser remonter tel quel.
+        if (err instanceof HttpError && err.status >= 500) {
+          logger.error({ err, email }, 'auth.sign_up.failed_unhandled');
+          return fail(
+            500,
+            'SIGN_UP_FAILED',
+            "Impossible de finaliser l'inscription. Si vous pensez avoir déjà un compte, essayez de vous connecter ; sinon contactez le support.",
+          );
+        }
+        throw err;
+      }
 
       // Mode strict KSM : un compte LOCAL avec email non vérifié ne reçoit aucune
       // session à l'inscription. Rien à provisionner/écrire tant que l'email n'est
@@ -172,36 +203,6 @@ export async function POST(request: NextRequest) {
       );
     }
   });
-}
-
-/**
- * Rattache un particulier fraîchement inscrit à l'organisation YowNews (EmployeeMembership
- * côté KSM), pour que ses logins suivants la résolvent parmi ses contextes. Fail-open :
- * une erreur (y compris "déjà membre") est loguée mais ne fait jamais échouer l'inscription.
- */
-async function attachToYowNewsOrganization(input: {
-  email: string;
-  firstName: string;
-  lastName: string;
-  phoneNumber?: string;
-}): Promise<void> {
-  try {
-    const [adminSession, organizationId] = await Promise.all([
-      getAdminSession(),
-      resolvePlatformOrganizationId(),
-    ]);
-    if (!adminSession || !organizationId) return;
-    await inviteEmployee(adminSession, organizationId, {
-      email: input.email,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      phoneNumber: input.phoneNumber,
-      jobTitle: 'Lecteur',
-      employmentType: 'READER',
-    });
-  } catch (cause) {
-    logger.warn({ cause, email: input.email }, 'auth.sign_up.organization_membership_failed');
-  }
 }
 
 /** Re-login l'utilisateur pour obtenir des authorities à jour ; null si le re-login échoue. */

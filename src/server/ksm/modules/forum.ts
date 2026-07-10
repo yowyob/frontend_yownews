@@ -2,6 +2,8 @@ import 'server-only';
 import { HttpError } from '@/lib/types/api';
 import type { AppSession } from '@/lib/types/auth';
 import { callKsm } from '@/server/ksm/client';
+import { serverEnv } from '@/env';
+import { MOCK_FORUM_GROUPS, MOCK_FORUM_POSTS, MOCK_FORUM_CATEGORIES } from '@/server/mock-data';
 
 export type ForumStatus = 'PENDING' | 'VALIDATED' | 'REJECTED';
 export type GroupType = 'FORUM' | 'COMMUNITY' | 'PUBLIC';
@@ -69,21 +71,29 @@ async function readRaw<T>(res: Response): Promise<T> {
 
 // ── Groupes ──
 export async function listPublicGroups(session: AppSession) {
+  if (serverEnv.MOCK_MODE) return MOCK_FORUM_GROUPS;
   const res = await callKsm<Response>('/api/v1/forum/groups/public', { method: 'GET', raw: true }, { session });
   return readRaw<DiscussionGroup[]>(res);
 }
 
 export async function listAllGroups(session: AppSession) {
+  if (serverEnv.MOCK_MODE) return MOCK_FORUM_GROUPS;
   const res = await callKsm<Response>('/api/v1/forum/groups/all', { method: 'GET', raw: true }, { session });
   return readRaw<DiscussionGroup[]>(res);
 }
 
 export async function getGroup(session: AppSession, groupId: string) {
+  if (serverEnv.MOCK_MODE) {
+    const group = MOCK_FORUM_GROUPS.find((g) => g.groupId === groupId);
+    if (!group) throw new HttpError({ status: 404, errorCode: 'NOT_FOUND', message: 'Group not found' });
+    return group;
+  }
   const res = await callKsm<Response>(`/api/v1/forum/groups/${groupId}`, { method: 'GET', raw: true }, { session });
   return readRaw<DiscussionGroup>(res);
 }
 
 export async function listMyGroups(session: AppSession, userId: string) {
+  if (serverEnv.MOCK_MODE) return MOCK_FORUM_GROUPS;
   const res = await callKsm<Response>(`/api/v1/forum/groups/mine?userId=${userId}`, { method: 'GET', raw: true }, { session });
   return readRaw<DiscussionGroup[]>(res);
 }
@@ -148,6 +158,7 @@ export async function addMemberToCommunity(session: AppSession, groupId: string,
 
 // ── Posts ──
 export async function listPostsByGroup(session: AppSession, groupeId: string) {
+  if (serverEnv.MOCK_MODE) return MOCK_FORUM_POSTS[groupeId] ?? [];
   const res = await callKsm<Response>(`/api/v1/forum/posts/groupe/${groupeId}`, { method: 'GET', raw: true }, { session });
   return readRaw<ForumPost[]>(res);
 }
@@ -178,6 +189,7 @@ export async function deletePost(session: AppSession, postId: string, memberId: 
 
 // ── Catégories ──
 export async function listCategoriesByGroup(session: AppSession, groupeId: string) {
+  if (serverEnv.MOCK_MODE) return MOCK_FORUM_CATEGORIES[groupeId] ?? [];
   const res = await callKsm<Response>(`/api/v1/forum/categories/groupe/${groupeId}`, { method: 'GET', raw: true }, { session });
   return readRaw<ForumCategorie[]>(res);
 }

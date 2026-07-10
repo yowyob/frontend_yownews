@@ -9,7 +9,7 @@ export function Hero() {
         <h1 id="hero-h1">
           Apprenez. <span className="o">Explorez.</span>
           <br />
-          Grandissez avec YowNews
+          Grandissez avec Yowyob Education
         </h1>
         <p className="lead">
           Des milliers d&apos;articles, podcasts et cours créés par des experts camerounais et

@@ -1,14 +1,13 @@
 'use client';
 import { Link } from '@/i18n/navigation';
-import { usePublicFeed } from './PublicFeedProvider';
-import { FeedCard } from './FeedCard';
+import ContentFeedCard from '@/components/feed/ContentFeedCard';
+import { STATIC_COURSES } from './staticContent';
 import { useSession } from '@/components/providers/session-provider';
 
 export function CoursesSection() {
-  const { data, loading } = usePublicFeed();
   const { session } = useSession();
   const isLoggedIn = !!session?.user;
-  const items = data.courses.slice(0, 3);
+  const spacePrefix = isLoggedIn ? '/reader' : '/public';
   const seeAllHref = isLoggedIn ? '/reader/feed/cours' : '/public/cours';
 
   return (
@@ -24,11 +23,16 @@ export function CoursesSection() {
           </Link>
         </div>
         <div className="lv-grid-3">
-          {items.length > 0 ? (
-            items.map((c) => <FeedCard key={c.id} item={c} />)
-          ) : (
-            <div className="lv-empty">{loading ? 'Chargement des cours…' : 'Bientôt de nouveaux cours.'}</div>
-          )}
+          {STATIC_COURSES.map((c) => (
+            <ContentFeedCard
+              key={c.id}
+              item={c}
+              spacePrefix={spacePrefix}
+              favorited={false}
+              onToggleFavorite={() => {}}
+              showActions={false}
+            />
+          ))}
         </div>
       </div>
     </section>

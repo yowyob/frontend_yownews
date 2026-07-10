@@ -1,7 +1,21 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api-client';
+
+// Bleu de la landing page (--b600 dans landingStyles.ts), en aplat — jamais en dégradé.
+const LANDING_BLUE = '#1F5FBF';
+// Variante plus sombre (--b700 de la même famille) réservée à la grande surface de la sidebar :
+// moins de clarté = moins de fatigue visuelle sur un aplat aussi large, tout en restant "le bleu landing".
+const SIDEBAR_BLUE = '#1A4F9E';
+
+// Un seul traitement (fond orange plein, texte blanc) pour les 3 rôles : les variantes
+// translucides précédentes manquaient de contraste sur le fond bleu foncé de la sidebar.
+const ROLE_BADGE_STYLE: Record<'admin' | 'editor' | 'reader', { bg: string; fg: string }> = {
+  admin: { bg: '#FF6B35', fg: '#fff' },
+  editor: { bg: '#FF6B35', fg: '#fff' },
+  reader: { bg: '#FF6B35', fg: '#fff' },
+};
 
 type NavItem = { href: string; label: string; icon: React.ReactNode; badge?: number; enabled?: boolean; adminOnly?: boolean };
 
@@ -28,13 +42,6 @@ const NAV: { label: string; items: NavItem[] }[] = [
     label: 'Communauté',
     items: [],
   },
-  {
-    label: 'Mon Compte',
-    items: [
-      { href: '/admin/profile', label: 'Mon Profil', enabled: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"/></svg> },
-      { href: '/admin/settings', label: 'Paramètres', icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg> },
-    ],
-  },
 ];
 
 const READER_NAV: { label: string; items: NavItem[] }[] = [
@@ -50,13 +57,6 @@ const READER_NAV: { label: string; items: NavItem[] }[] = [
     items: [
       { href: '/reader/forums', label: 'Forums', enabled: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg> },
       { href: '/reader/newsletter', label: 'Newsletter', enabled: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg> },
-    ],
-  },
-  {
-    label: 'Mon Compte',
-    items: [
-      { href: '/reader/profile', label: 'Mon Profil', enabled: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"/></svg> },
-      { href: '/reader/settings', label: 'Paramètres', icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg> },
     ],
   },
 ];
@@ -138,6 +138,10 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
   );
   const [collapsed, setCollapsed] = useState(false);
   const [evalOpen, setEvalOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Ferme le drawer mobile à chaque changement de page (évite qu'il reste ouvert par-dessus le contenu).
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   useEffect(() => {
     try {
@@ -177,24 +181,59 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
         .map((group) => ({ ...group, items: group.items.filter((item) => isAdmin || !item.adminOnly) }))
         .filter((group) => group.items.length > 0 || group.label === 'Gestion' || group.label === 'Communauté');
 
+  // Les groupes (Général, Gestion, …) sont eux-mêmes des accordéons — un seul ouvert à la fois,
+  // pour réduire la charge visuelle. On ouvre par défaut celui qui contient la page active.
+  const [openGroup, setOpenGroup] = useState<string | null>(() => {
+    if (pathname.startsWith('/admin/newsletters') || pathname === '/editor/newsletter') return 'Gestion';
+    if (pathname.startsWith('/admin/forums') || pathname === '/editor/forum') return 'Communauté';
+    if (
+      pathname.startsWith('/admin/blogs') || pathname.startsWith('/editor/blog') ||
+      pathname.startsWith('/admin/courses') || pathname.startsWith('/editor/course') ||
+      pathname.startsWith('/admin/podcasts') || pathname.startsWith('/editor/podcast') ||
+      pathname.startsWith('/admin/categories') || pathname.startsWith('/admin/tags')
+    ) return 'Gestion';
+    for (const group of navGroups) {
+      for (const item of group.items) {
+        const href =
+          item.label === 'Tableau de bord' ? `${spacePrefix}/dashboard`
+          : item.label === 'Favoris' ? `${spacePrefix}/favorites`
+          : item.label === 'Forums' ? (isAdmin ? '/admin/forums' : isReader ? '/reader/forums' : '/editor/forum')
+          : item.href;
+        if (pathname === href || pathname.startsWith(href + '/')) return group.label;
+      }
+    }
+    return 'Général';
+  });
+  function toggleGroup(label: string) {
+    setOpenGroup((cur) => (cur === label ? null : label));
+  }
+
   const activeLabel = (() => {
     if (pathname.startsWith('/admin/newsletters') || pathname === '/editor/newsletter') return 'Newsletter';
     if (pathname.startsWith('/admin/forums') || pathname === '/editor/forum') return 'Forums';
     if (pathname.startsWith('/admin/blogs') || pathname.startsWith('/editor/blog')) return 'Blog';
     if (pathname.startsWith('/admin/courses') || pathname.startsWith('/editor/course')) return 'Cours';
     if (pathname.startsWith('/admin/podcasts') || pathname.startsWith('/editor/podcast')) return 'Podcast';
+    // Sous-liens du dropdown « Feed » (pas des items de navGroups, donc jamais matchés par la
+    // boucle ci-dessous) — sans ce cas, le titre retombait sur « Tableau de bord ».
+    if (pathname.includes('/feed/blogs')) return 'Blogs';
+    if (pathname.includes('/feed/podcasts')) return 'Podcasts';
+    if (pathname.includes('/feed/cours')) return 'Cours';
+    // Mon Profil / Paramètres n'apparaissent plus dans la sidebar (déplacés dans le menu du
+    // profil de la navbar) mais le titre doit quand même refléter la page active.
+    if (pathname === profileHref || pathname.startsWith(profileHref + '/')) return 'Mon Profil';
+    if (pathname.endsWith('/settings')) return 'Paramètres';
     for (const group of navGroups) {
       for (const item of group.items) {
         const href =
-          item.label === 'Mon Profil' ? profileHref
-          : item.label === 'Tableau de bord' ? `${spacePrefix}/dashboard`
+          item.label === 'Tableau de bord' ? `${spacePrefix}/dashboard`
           : item.label === 'Favoris' ? `${spacePrefix}/favorites`
           : item.label === 'Forums' ? (isAdmin ? '/admin/forums' : isReader ? '/reader/forums' : '/editor/forum')
           : item.href;
         if (pathname === href || pathname.startsWith(href + '/')) return item.label;
       }
     }
-    return 'YowNews';
+    return 'Tableau de bord';
   })();
 
   async function handleLogout() {
@@ -206,6 +245,26 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
     router.push('/auth/login');
   }
 
+  // Bouton d'en-tête d'un groupe dépliable (Feed / Education / Newsletter / Forums) —
+  // factorisé pour éviter de dupliquer 4 fois le même bloc de style (source de dérive visuelle).
+  function renderDropdownToggle(label: string, icon: ReactNode, open: boolean, onToggle: () => void) {
+    return (
+      <button onClick={onToggle} style={{
+        display: 'flex', alignItems: 'center', gap: '10px', width: 'calc(100% - 20px)',
+        margin: '1px 10px', padding: '10px 20px', borderRadius: '8px', border: 'none',
+        background: 'transparent', color: 'rgba(255,255,255,.88)', fontSize: '14.5px',
+        cursor: 'pointer', textAlign: 'left', transition: 'all .2s', whiteSpace: 'nowrap',
+      }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.08)'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.88)'; }}
+      >
+        <span style={{ flexShrink: 0 }}>{icon}</span>
+        <span style={{ flex: 1 }} className="sb-text">{label}</span>
+        <svg className="sb-text" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}><path d="M9 18l6-6-6-6" /></svg>
+      </button>
+    );
+  }
+
   // exact=true : le lien n'est actif que si le chemin correspond exactement
   // (evite que /admin/blogs soit marque actif quand on est sur /admin/blogs/moderation)
   function renderSubLink(href: string, label: string, exact = false) {
@@ -214,14 +273,14 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
       <Link key={href} href={href} style={{
         display: 'flex', alignItems: 'center', gap: '8px',
         margin: '1px 10px', padding: '8px 12px 8px 30px', borderRadius: '8px',
-        fontSize: '12.5px', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap',
-        color: active ? '#fff' : 'rgba(255,255,255,.7)',
+        fontSize: '13.5px', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap',
+        color: active ? '#fff' : 'rgba(255,255,255,.88)',
         background: active ? 'rgba(255,255,255,.12)' : 'transparent',
         borderLeft: active ? '3px solid var(--accent)' : '3px solid transparent',
         transition: 'all .2s',
       }}
         onMouseEnter={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.08)'; (e.currentTarget as HTMLElement).style.color = '#fff'; } }}
-        onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.7)'; } }}
+        onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.88)'; } }}
       >
         <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'currentColor', flexShrink: 0, opacity: 0.6 }} />
         {label}
@@ -232,8 +291,8 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
   function renderSectionLabel(label: string) {
     return (
       <div style={{
-        padding: '6px 12px 2px 30px', fontSize: '10px', fontWeight: 700,
-        letterSpacing: '1px', textTransform: 'uppercase', color: 'rgba(255,255,255,.35)',
+        padding: '6px 12px 2px 30px', fontSize: '11px', fontWeight: 700,
+        letterSpacing: '1px', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)',
       }} className="sb-text">
         {label}
       </div>
@@ -242,16 +301,42 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
 
   return (
     <>
+      {/* Déclencheur mobile — la sidebar devient un drawer sous 768px (cf. CSS en bas) */}
+      <button
+        type="button"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Ouvrir le menu"
+        className="sb-mobile-toggle"
+        style={{
+          position: 'fixed', top: '14px', left: '14px', zIndex: 210,
+          width: '38px', height: '38px', borderRadius: '9px', border: 'none',
+          background: 'var(--primary)', color: '#fff', display: 'none',
+          alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          boxShadow: '0 2px 8px rgba(0,0,0,.15)',
+        }}
+      >
+        <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+
+      {/* Overlay du drawer mobile */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 199 }}
+        />
+      )}
+
       <aside style={{
         position: 'fixed', left: 0, top: 0, bottom: 0, width: 'var(--sb-w, 260px)',
-        background: 'var(--primary)', display: 'flex', flexDirection: 'column',
-        zIndex: 200, overflowY: 'auto', transition: 'width .3s ease',
-      }} className={collapsed ? 'sb sb-collapsed' : 'sb'}>
+        background: SIDEBAR_BLUE, display: 'flex', flexDirection: 'column',
+        zIndex: 200, overflowY: 'auto', transition: 'width .3s ease, transform .3s ease',
+      }} className={`${collapsed ? 'sb sb-collapsed' : 'sb'}${mobileOpen ? ' sb-mobile-open' : ''}`}>
         {/* Header */}
         <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: '10px', flexShrink: 0 }}>
           {!collapsed && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-              <Link href="/" style={{ width: '34px', height: '34px', background: 'linear-gradient(135deg,var(--blue),var(--accent))', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '14px', color: '#fff', flexShrink: 0, textDecoration: 'none' }}>YN</Link>
+              <Link href="/" style={{ width: '34px', height: '34px', background: '#FF6B35', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '14px', color: '#fff', flexShrink: 0, textDecoration: 'none' }}>YE</Link>
               <span style={{ fontFamily: 'var(--font-d)', fontSize: '16px', fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {activeLabel}
               </span>
@@ -276,26 +361,44 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
 
         {/* Profile */}
         <div style={{ padding: '18px 20px', borderBottom: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: '50%', border: '2px solid var(--accent)', background: 'linear-gradient(135deg,var(--blue),var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '14px', color: '#fff', flexShrink: 0 }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '50%', border: '2px solid rgba(255,255,255,.25)', background: LANDING_BLUE, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '14px', color: '#fff', flexShrink: 0 }}>
             {initials(displayName)}
           </div>
           <div style={{ flex: 1, minWidth: 0 }} className="sb-text">
-            <div style={{ fontFamily: 'var(--font-d)', fontSize: '13px', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</div>
-            <span style={{ display: 'inline-block', background: 'rgba(239,68,68,.2)', color: '#FCA5A5', fontFamily: 'var(--font-d)', fontSize: '10px', fontWeight: 600, padding: '2px 10px', borderRadius: '20px', marginTop: '3px' }}>{roleBadge}</span>
+            <div style={{ fontFamily: 'var(--font-d)', fontSize: '14.5px', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</div>
+            <span style={{
+              display: 'inline-block', fontFamily: 'var(--font-d)', fontSize: '11px', fontWeight: 600,
+              padding: '2px 10px', borderRadius: '20px', marginTop: '3px',
+              background: ROLE_BADGE_STYLE[variant].bg, color: ROLE_BADGE_STYLE[variant].fg,
+            }}>{roleBadge}</span>
           </div>
         </div>
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: '12px 0' }}>
-          {navGroups.map((group) => (
+          {navGroups.map((group) => {
+            const groupExpanded = collapsed || openGroup === group.label;
+            return (
             <div key={group.label} style={{ marginBottom: '4px' }}>
-              <div style={{ padding: '10px 20px 4px', fontSize: '10px', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,.35)' }} className="sb-text">
-                {group.label}
-              </div>
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.label)}
+                className="sb-text"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', width: '100%',
+                  padding: '10px 20px 8px', border: 'none', background: 'transparent', cursor: 'pointer',
+                  fontSize: '11px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,.9)', textAlign: 'left',
+                }}
+              >
+                <span style={{ flex: 1 }}>{group.label}</span>
+                <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" style={{ flexShrink: 0, opacity: 0.7, transform: groupExpanded ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}><path d="M9 18l6-6-6-6" /></svg>
+              </button>
+              {groupExpanded && (
+              <>
               {group.items.map((item) => {
                 const href =
-                  item.label === 'Mon Profil' ? profileHref
-                  : item.label === 'Tableau de bord' ? `${spacePrefix}/dashboard`
+                  item.label === 'Tableau de bord' ? `${spacePrefix}/dashboard`
                   : item.label === 'Favoris' ? `${spacePrefix}/favorites`
                   : item.label === 'Forums' ? (isAdmin ? '/admin/forums' : '/reader/forums')
                   : item.href;
@@ -304,7 +407,7 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                 const baseStyle: React.CSSProperties = {
                   display: 'flex', alignItems: 'center', gap: '10px',
                   padding: active ? '10px 20px 10px 17px' : '10px 20px',
-                  margin: '1px 10px', borderRadius: '8px', fontSize: '13px',
+                  margin: '1px 10px', borderRadius: '8px', fontSize: '14.5px',
                   transition: 'all .2s', whiteSpace: 'nowrap', textDecoration: 'none',
                 };
                 const badge = badgeValue != null ? (
@@ -327,13 +430,13 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                 return (
                   <Link key={href} href={href} style={{
                     ...baseStyle,
-                    color: active ? '#fff' : 'rgba(255,255,255,.7)',
+                    color: active ? '#fff' : 'rgba(255,255,255,.88)',
                     background: active ? 'rgba(255,255,255,.12)' : 'transparent',
                     borderLeft: active ? '3px solid var(--accent)' : '3px solid transparent',
                     cursor: 'pointer',
                   }}
                     onMouseEnter={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.08)'; (e.currentTarget as HTMLElement).style.color = '#fff'; } }}
-                    onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.7)'; } }}
+                    onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.88)'; } }}
                   >
                     <span style={{ flexShrink: 0 }}>{item.icon}</span>
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }} className="sb-text">{item.label}</span>
@@ -345,21 +448,12 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
               {/* Dropdown Feed */}
               {group.label === 'Général' && (
                 <>
-                  <button onClick={() => setFeedOpen((o) => !o)} style={{
-                    display: 'flex', alignItems: 'center', gap: '10px', width: 'calc(100% - 20px)',
-                    margin: '1px 10px', padding: '10px 20px', borderRadius: '8px', border: 'none',
-                    background: 'transparent', color: 'rgba(255,255,255,.7)', fontSize: '13px',
-                    cursor: 'pointer', textAlign: 'left', transition: 'all .2s', whiteSpace: 'nowrap',
-                  }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.08)'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.7)'; }}
-                  >
-                    <span style={{ flexShrink: 0 }}>
-                      <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M4 11a9 9 0 019 9M4 4a16 16 0 0116 16"/><circle cx="5" cy="19" r="1"/></svg>
-                    </span>
-                    <span style={{ flex: 1 }} className="sb-text">Feed</span>
-                    <svg className="sb-text" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0, transform: feedOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}><path d="M9 18l6-6-6-6" /></svg>
-                  </button>
+                  {renderDropdownToggle(
+                    'Feed',
+                    <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M4 11a9 9 0 019 9M4 4a16 16 0 0116 16"/><circle cx="5" cy="19" r="1"/></svg>,
+                    feedOpen,
+                    () => setFeedOpen((o) => !o),
+                  )}
 
                   {feedOpen && (
                     <div className="sb-text" style={{ marginBottom: '4px' }}>
@@ -375,21 +469,12 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
               {group.label === 'Gestion' && !isReader && (
                 <>
                   {/* Education */}
-                  <button onClick={() => setEducationOpen((o) => !o)} style={{
-                    display: 'flex', alignItems: 'center', gap: '10px', width: 'calc(100% - 20px)',
-                    margin: '1px 10px', padding: '10px 20px', borderRadius: '8px', border: 'none',
-                    background: 'transparent', color: 'rgba(255,255,255,.7)', fontSize: '13px',
-                    cursor: 'pointer', textAlign: 'left', transition: 'all .2s', whiteSpace: 'nowrap',
-                  }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.08)'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.7)'; }}
-                  >
-                    <span style={{ flexShrink: 0 }}>
-                      <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M12 2L2 7l10 5 10-5-10-5M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                    </span>
-                    <span style={{ flex: 1 }} className="sb-text">Education</span>
-                    <svg className="sb-text" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0, transform: educationOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}><path d="M9 18l6-6-6-6" /></svg>
-                  </button>
+                  {renderDropdownToggle(
+                    'Education',
+                    <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M12 2L2 7l10 5 10-5-10-5M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>,
+                    educationOpen,
+                    () => setEducationOpen((o) => !o),
+                  )}
 
                   {educationOpen && (
                     <div className="sb-text" style={{ marginBottom: '4px' }}>
@@ -424,21 +509,12 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                   {/* Newsletter : dropdown (admin) ou lien direct (éditeur) */}
                   {isAdmin ? (
                     <>
-                      <button onClick={() => setNewsletterOpen((o) => !o)} style={{
-                        display: 'flex', alignItems: 'center', gap: '10px', width: 'calc(100% - 20px)',
-                        margin: '1px 10px', padding: '10px 20px', borderRadius: '8px', border: 'none',
-                        background: 'transparent', color: 'rgba(255,255,255,.7)', fontSize: '13px',
-                        cursor: 'pointer', textAlign: 'left', transition: 'all .2s', whiteSpace: 'nowrap',
-                      }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.08)'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.7)'; }}
-                      >
-                        <span style={{ flexShrink: 0 }}>
-                          <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
-                        </span>
-                        <span style={{ flex: 1 }} className="sb-text">Newsletter</span>
-                        <svg className="sb-text" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0, transform: newsletterOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}><path d="M9 18l6-6-6-6" /></svg>
-                      </button>
+                      {renderDropdownToggle(
+                        'Newsletter',
+                        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>,
+                        newsletterOpen,
+                        () => setNewsletterOpen((o) => !o),
+                      )}
                       {newsletterOpen && (
                         <div className="sb-text" style={{ marginBottom: '4px' }}>
                           {renderSubLink('/admin/newsletters', 'Mes newsletters', true)}
@@ -455,15 +531,15 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                         <Link href="/editor/newsletter" style={{
                           display: 'flex', alignItems: 'center', gap: '10px',
                           padding: active ? '10px 20px 10px 17px' : '10px 20px',
-                          margin: '1px 10px', borderRadius: '8px', fontSize: '13px',
+                          margin: '1px 10px', borderRadius: '8px', fontSize: '14.5px',
                           transition: 'all .2s', whiteSpace: 'nowrap', textDecoration: 'none',
-                          color: active ? '#fff' : 'rgba(255,255,255,.7)',
+                          color: active ? '#fff' : 'rgba(255,255,255,.88)',
                           background: active ? 'rgba(255,255,255,.12)' : 'transparent',
                           borderLeft: active ? '3px solid var(--accent)' : '3px solid transparent',
                           cursor: 'pointer',
                         }}
                           onMouseEnter={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.08)'; (e.currentTarget as HTMLElement).style.color = '#fff'; } }}
-                          onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.7)'; } }}
+                          onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.88)'; } }}
                         >
                           <span style={{ flexShrink: 0 }}>
                             <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
@@ -481,21 +557,12 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                 <>
                   {isAdmin ? (
                     <>
-                      <button onClick={() => setForumOpen((o) => !o)} style={{
-                        display: 'flex', alignItems: 'center', gap: '10px', width: 'calc(100% - 20px)',
-                        margin: '1px 10px', padding: '10px 20px', borderRadius: '8px', border: 'none',
-                        background: 'transparent', color: 'rgba(255,255,255,.7)', fontSize: '13px',
-                        cursor: 'pointer', textAlign: 'left', transition: 'all .2s', whiteSpace: 'nowrap',
-                      }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.08)'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.7)'; }}
-                      >
-                        <span style={{ flexShrink: 0 }}>
-                          <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-                        </span>
-                        <span style={{ flex: 1 }} className="sb-text">Forums</span>
-                        <svg className="sb-text" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0, transform: forumOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}><path d="M9 18l6-6-6-6" /></svg>
-                      </button>
+                      {renderDropdownToggle(
+                        'Forums',
+                        <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
+                        forumOpen,
+                        () => setForumOpen((o) => !o),
+                      )}
                       {forumOpen && (
                         <div className="sb-text" style={{ marginBottom: '4px' }}>
                           {renderSubLink('/admin/forums', 'Mes forums', true)}
@@ -510,15 +577,15 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                         <Link href="/editor/forum" style={{
                           display: 'flex', alignItems: 'center', gap: '10px',
                           padding: active ? '10px 20px 10px 17px' : '10px 20px',
-                          margin: '1px 10px', borderRadius: '8px', fontSize: '13px',
+                          margin: '1px 10px', borderRadius: '8px', fontSize: '14.5px',
                           transition: 'all .2s', whiteSpace: 'nowrap', textDecoration: 'none',
-                          color: active ? '#fff' : 'rgba(255,255,255,.7)',
+                          color: active ? '#fff' : 'rgba(255,255,255,.88)',
                           background: active ? 'rgba(255,255,255,.12)' : 'transparent',
                           borderLeft: active ? '3px solid var(--accent)' : '3px solid transparent',
                           cursor: 'pointer',
                         }}
                           onMouseEnter={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.08)'; (e.currentTarget as HTMLElement).style.color = '#fff'; } }}
-                          onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.7)'; } }}
+                          onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.88)'; } }}
                         >
                           <span style={{ flexShrink: 0 }}>
                             <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -530,19 +597,22 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                   )}
                 </>
               )}
+              </>
+              )}
             </div>
-          ))}
+            );
+          })}
         </nav>
 
         {/* Évaluer */}
         <div style={{ padding: '8px 10px 0', flexShrink: 0 }}>
           <button onClick={() => setEvalOpen(true)} style={{
             display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', borderRadius: '8px',
-            fontSize: '13px', color: 'rgba(255,255,255,.6)', background: 'none', border: 'none', width: '100%',
+            fontSize: '14.5px', color: 'rgba(255,255,255,.82)', background: 'none', border: 'none', width: '100%',
             transition: 'all .2s', cursor: 'pointer', whiteSpace: 'nowrap',
           }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.08)'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.6)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.82)'; }}
           >
             <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="16" height="16" style={{ flexShrink: 0 }}>
               <path d="M12 2l2.9 6.26L22 9.27l-5 4.87L18.18 21 12 17.27 5.82 21 7 14.14l-5-4.87 7.1-1.01L12 2z"/>
@@ -557,11 +627,11 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
         <div style={{ padding: '16px 10px', borderTop: '1px solid rgba(255,255,255,.08)', flexShrink: 0 }}>
           <button onClick={handleLogout} style={{
             display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', borderRadius: '8px',
-            fontSize: '13px', color: 'rgba(255,255,255,.45)', background: 'none', border: 'none', width: '100%',
+            fontSize: '14.5px', color: 'rgba(255,255,255,.55)', background: 'none', border: 'none', width: '100%',
             transition: 'all .2s', cursor: 'pointer', whiteSpace: 'nowrap',
           }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,.1)'; (e.currentTarget as HTMLElement).style.color = '#FCA5A5'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.45)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.55)'; }}
           >
             <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="16" height="16" style={{ flexShrink: 0 }}>
               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
@@ -578,7 +648,14 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
           .sb { width: 64px!important; }
           .sb-text { display: none!important; }
         }
-        @media(max-width:768px){ .sb { display: none!important; } }
+        @media(max-width:768px){
+          /* La sidebar devient un drawer plein qui glisse depuis la gauche, plutôt que de
+             disparaître sans alternative — sinon impossible de naviguer sur mobile. */
+          .sb { width: 260px!important; transform: translateX(-100%); }
+          .sb.sb-mobile-open { transform: translateX(0); }
+          .sb.sb-mobile-open .sb-text { display: block!important; }
+          .sb-mobile-toggle { display: flex!important; }
+        }
       `}</style>
     </>
   );

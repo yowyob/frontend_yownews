@@ -2,6 +2,7 @@ import 'server-only';
 import { HttpError } from '@/lib/types/api';
 import type { AppSession } from '@/lib/types/auth';
 import { callKsm } from '@/server/ksm/client';
+import { serverEnv } from '@/env';
 
 // Le module newsletter renvoie des entités BRUTES (pas d'enveloppe ApiResponse),
 // donc on appelle callKsm en `raw` puis on parse/valide la réponse nous-mêmes.
@@ -111,6 +112,11 @@ export type ApprovedRedacteurEntity = { id: string; email: string; nom: string; 
 // Renvoie le rédacteur APPROVED pour ce compte, ou un objet vide-ish (id null) si aucun —
 // le endpoint KSM répond 200 avec un corps vide plutôt que 404 pour ce cas (Mono vide).
 export async function getApprovedRedacteurByUserId(session: AppSession, userId: string) {
+  // Générique en mode démo : n'importe quel auteur de contenu est traité comme rédacteur
+  // newsletter approuvé, pour que le bouton "S'abonner" soit visible sans donnée réelle.
+  if (serverEnv.MOCK_MODE) {
+    return { id: `mock-redacteur-${userId}`, email: 'demo@yowyob-edu.com', nom: 'YowYob', prenom: 'Auteur' } satisfies ApprovedRedacteurEntity;
+  }
   const res = await callKsm<Response>(`/api/v1/newsletter/redacteurs/by-user/${userId}`, { method: 'GET', raw: true }, { session });
   if (res.status === 404 || res.status === 204) return null;
   const text = await res.text();
@@ -265,6 +271,7 @@ export async function listMyCategorySubscriptions(session: AppSession, userId: s
 
 // ── Abonnements lecteur (rédacteurs précis) ──
 export async function subscribeRedacteur(session: AppSession, userId: string, redacteurId: string, email: string) {
+  if (serverEnv.MOCK_MODE) return;
   await callKsm<Response>(
     `/api/v1/newsletter/redacteurs/${redacteurId}/subscribe?userId=${userId}`,
     { method: 'POST', body: { email }, raw: true },
@@ -273,12 +280,14 @@ export async function subscribeRedacteur(session: AppSession, userId: string, re
 }
 
 export async function unsubscribeRedacteur(session: AppSession, userId: string, redacteurId: string) {
+  if (serverEnv.MOCK_MODE) return;
   await callKsm<Response>(`/api/v1/newsletter/redacteurs/${redacteurId}/subscribe?userId=${userId}`, { method: 'DELETE', raw: true }, { session });
 }
 
 export type FollowedRedacteurEntity = { id: string; email: string; nom: string; prenom: string };
 
 export async function listMyFollowedRedacteurs(session: AppSession, userId: string) {
+  if (serverEnv.MOCK_MODE) return [] as FollowedRedacteurEntity[];
   const res = await callKsm<Response>(`/api/v1/newsletter/redacteurs/abonnements?userId=${userId}`, { method: 'GET', raw: true }, { session });
   return readRaw<FollowedRedacteurEntity[]>(res);
 }

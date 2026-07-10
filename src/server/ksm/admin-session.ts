@@ -2,6 +2,7 @@ import 'server-only';
 import { serverEnv } from '@/env';
 import { logger } from '@/server/logger';
 import type { AppSession } from '@/lib/types/auth';
+import { getMockSession } from '@/server/mock-session';
 import * as authApi from '@/server/ksm/modules/auth';
 import {
   listRoles,
@@ -14,7 +15,7 @@ import {
   ROLE_CODE_NEWSLETTER_EDITOR,
 } from '@/server/ksm/modules/administration';
 
-// Session admin YowNews obtenue côté serveur et réutilisée pour les opérations privilégiées
+// Session admin Yowyob Education obtenue côté serveur et réutilisée pour les opérations privilégiées
 // (poser le rôle Lecteur aux nouveaux inscrits). L'admin a déjà administration:assignments:write.
 // Mise en cache en mémoire (pattern de platform-org.ts) ; re-login peu avant expiration.
 
@@ -54,6 +55,8 @@ function buildAdminSession(contextual: authApi.ContextualLoginResponse): AppSess
  * Renvoie null si non configuré ou si le login échoue (l'appelant doit dégrader proprement).
  */
 export async function getAdminSession(): Promise<AppSession | null> {
+  if (serverEnv.MOCK_MODE) return getMockSession('admin');
+
   const now = Math.floor(Date.now() / 1000);
   if (cachedSession && cachedSession.expiresAt - REFRESH_MARGIN_SECONDS > now) {
     return cachedSession;
@@ -117,7 +120,7 @@ export async function getNewsletterReaderRoleId(adminSession: AppSession): Promi
 }
 
 /**
- * Assigne les rôles Lecteur par défaut d'un nouveau compte YowNews : education + newsletter.
+ * Assigne les rôles Lecteur par défaut d'un nouveau compte Yowyob Education : education + newsletter.
  * Un lecteur doit pouvoir consulter/s'abonner aux catégories newsletter dès l'inscription — cf.
  * bug où EDUCATION_READER_PERMISSIONS seul ne porte aucune permission newsletter:*.
  * Best-effort par rôle : l'échec d'un rôle n'empêche pas l'assignation de l'autre.

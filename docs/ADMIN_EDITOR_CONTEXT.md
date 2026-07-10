@@ -1,5 +1,17 @@
 # YowNews — Espace Admin / Éditeur : contexte & décisions
 
+> ⚠️ **Renommage de marque (session #7, 2026-07-10)** : le produit s'appelle désormais
+> **Yowyob Education** (slug technique `yowyob-edu`). Identifiants renommés en conséquence
+> côté code/config (client KSM `yowyob-edu-frontend`, code d'organisation `YOWYOB_EDU`, cookie
+> `yowyob_edu_session`, emails `*@yowyob-edu.com`/`.local`, fichiers seed
+> `V81__yowyob_edu_seed.sql`/`V82__yowyob_edu_editor_seed.sql`, classes
+> `YowyobEduAdminBootstrap{Properties,Initializer}`). **Le reste de ce document n'a pas été
+> réécrit** : toute la narration ci-dessous décrit des sessions passées où le produit
+> s'appelait réellement "YowNews" — c'est exact pour l'époque décrite, pas l'état actuel des
+> identifiants. Se référer au code courant (pas à ce doc) pour les valeurs exactes en vigueur.
+> Le répertoire frontend garde le chemin `/home/devstack/Documents/frontend/yownews` (non
+> renommé) ; seul le contenu (package npm, code, UI) a changé.
+
 > Document de passation. Résume tout le travail réalisé sur l'espace d'administration
 > de l'app **yownews** (Next 16 / next-intl) et son backend **KSM** (Spring WebFlux, hexagonal).
 > Frontend réel = `/home/devstack/Documents/frontend/yownews` (port 3000). Le dossier
@@ -828,3 +840,132 @@ La chaîne authorNom/Prenom était intacte ; cause = comptes sans firstName/last
 mode organisation, champs masqués). Fix BFF (`api/newsletter/newsletters/route.ts` POST) :
 fallback `username` puis `email` quand nom+prénom vides. Donnée existante à corriger à la main
 (`UPDATE newsletter.newsletter_entity SET author_nom=… WHERE id=…`) ou en recréant la newsletter.
+
+---
+
+## 18. Test du workflow user simple en conditions réelles (session #7)
+
+### 18.1 Retrait de l'appel HRM mort dans le sign-up
+En testant l'inscription individuelle dans un vrai navigateur, chaque sign-up déclenchait un
+appel `POST /api/employees/invite` (module RH de KSM) qui échouait systématiquement en
+`403 CLIENT_APPLICATION_SERVICE_NOT_ALLOWED` (« Client application is not allowed to access
+service HRM »), logué en warning `auth.sign_up.organization_membership_failed`. C'est le même
+mur déjà rencontré et abandonné en §16.4 point 6 (tentative « employees » pour les users
+simples) — un reliquat de code n'avait pas été nettoyé de `sign-up/route.ts`.
+
+**Analyse confirmée** : cet appel n'a jamais été nécessaire pour un lecteur simple.
+- L'appartenance au **tenant** YowNews se fait dès l'inscription via
+  `discoverSignUpContexts('YOWNEWS')` (résolu *avant* l'appel `signUp`), indépendamment de tout
+  `employee_membership`.
+- Le rôle **Lecteur** est posé séparément par `provisionReaderRoles(...)` — fonctionnel, inchangé.
+- Chaque appel KSM reçoit quand même l'org YowNews dans `X-Organization-Id`, même sans
+  `organizationId` en session : `client.ts` retombe sur `resolvePlatformOrganizationId()` (résolution
+  dynamique par le code `YOWNEWS`) si `session.workspace.organizationId` est absent — donc les
+  gates d'entitlement KSM passent normalement pour un lecteur simple.
+- `organizationId` reste **volontairement `NULL`** sur le contenu créé par les users YowNews
+  (blog/cours/podcast/newsletter) — ce n'est pas un oubli, cette colonne ne sert qu'aux
+  **organisations externes éditrices** (§16). Ne pas chercher à la peupler pour un user YowNews normal.
+
+**Décision** : suppression du code mort plutôt que souscription au service HRM (qui aurait exigé
+d'ajouter `'HRM'` aux `allowed_service_codes` du client dans `V81__yownews_seed.sql` + une
+souscription d'org — hors périmètre des 4 modules possédés, et inutile).
+
+**Changements** :
+- `src/app/api/auth/sign-up/route.ts` : suppression de la fonction `attachToYowNewsOrganization`
+  et de son appel dans la branche inscription particulier ; imports `inviteEmployee`,
+  `getAdminSession`, `resolvePlatformOrganizationId` retirés (devenus inutiles).
+- `src/server/ksm/modules/organization.ts` : **fichier supprimé** (plus aucun consommateur —
+  vérifié : `/editor/my-org` et `/api/org/employees` utilisent une fonction homonyme mais
+  distincte dans `src/server/ksm/modules/publisher-orgs.ts`, non concernée).
+
+### 18.2 ⚠️ Point ouvert (hors périmètre) — aucun email de vérification n'est envoyé, MailHog reste vide
+
+**Constat** : après inscription individuelle, KSM répond `201` avec
+`{status:'EMAIL_VERIFICATION_REQUIRED', emailVerified:false}` (mode strict — pas de session tant
+que l'email n'est pas vérifié), mais MailHog (`:8025`) ne reçoit jamais rien.
+
+**Cause identifiée dans `RT-comops-auth-core`** (module KSM **non possédé** — signalé, non corrigé) :
+- `IWM_AUTH_EMAIL_ENABLED=false` dans `KSM_Kernel_Layer/.env.local` (`.env.local.example` aussi ;
+  seuls les exemples VM/preprod/prod le mettent à `true`). Ce flag est **distinct** de la config
+  SMTP (`SPRING_MAIL_*`) déjà branchée à MailHog pour les newsletters (§17.2) — même avec le SMTP
+  configuré, `auth-core` n'essaie jamais d'envoyer un email tant que ce flag reste à `false`.
+- `AuthEmailDeliveryService.deliver()` (`RT-comops-auth-core/.../application/service/`) : si
+  `!properties.isEnabled()`, retourne un `DeliveryResult.preview(token, …)` **sans jamais appeler**
+  `mailSender.send(...)` — normal que MailHog ne voie rien.
+- Bug complémentaire dans `AuthApplicationService.java:364-372` (chemin sign-up) : ce
+  `DeliveryResult` — qui porterait le token en mode preview — est **jeté** (`.then()` sans le
+  renvoyer à l'appelant), contrairement au chemin « renvoyer l'email de vérification »
+  (lignes 635-661) qui, lui, le renvoie. Résultat : **aucun moyen actuel de récupérer le lien de
+  vérification via l'API** au moment du sign-up, ni par email (flag désactivé) ni par la réponse
+  (jetée).
+
+**Fichiers concernés (hors périmètre, à faire suivre au propriétaire d'`auth-core`)** :
+- `RT-comops-auth-core/.../config/AuthEmailProperties.java`
+- `RT-comops-auth-core/.../application/service/AuthEmailDeliveryService.java`
+- `RT-comops-auth-core/.../application/service/AuthApplicationService.java` (lignes ~364-372)
+
+**Options de contournement** :
+- **A.** Activer `IWM_AUTH_EMAIL_ENABLED=true` en local (le SMTP MailHog est déjà configuré pour
+  newsletter, §17.2). **✅ APPLIQUÉE le 2026-07-10 (session #7)**, avec l'accord explicite de
+  l'utilisateur — voir encadré ci-dessous.
+- **B.** Pour débloquer un test ponctuel sans toucher au code : lire le token de vérification
+  directement en base Postgres (table de tokens d'`auth-core`) pour construire manuellement le
+  lien `/auth/verify-email?token=…`.
+
+> ⚠️ **Config temporaire active — à retirer sur demande**
+>
+> `IWM_AUTH_EMAIL_ENABLED=true` a été posé dans `KSM_Kernel_Layer/.env.local` (ligne ~22-27,
+> commentaire explicite dans le fichier). C'est un changement de **config uniquement**
+> (`.env.local`), pas de code — aucun fichier `.java` n'a été modifié pour ce point. Conséquence :
+> KSM envoie désormais réellement l'email de vérification à l'inscription (visible dans MailHog
+> `:8025`), ce qui débloque la connexion après inscription (cf. §18.4 pour le bug de sélection de
+> contexte associé).
+>
+> **Pour retirer** (revenir au comportement par défaut du dépôt) : dans `KSM_Kernel_Layer/.env.local`,
+> remettre `IWM_AUTH_EMAIL_ENABLED=false` (ou supprimer la ligne, le défaut Java est `false`), puis
+> redémarrer KSM. Aucune autre étape — rien d'autre n'a été changé pour ce point.
+
+### 18.3 ⚠️ Point ouvert (hors périmètre) — inscription qui plante si l'Actor existe déjà sans compte
+
+**Constat** : si un `Actor` existe déjà pour un email dans le tenant YowNews (sans `UserAccount`
+associé), l'inscription échoue en **500 générique** au lieu de réutiliser cet Actor.
+
+**Cause identifiée dans `auth-core`/`actor-core`** (modules KSM **non possédés** — signalé, non
+corrigé, contrainte de périmètre confirmée y compris en dérogation ponctuelle) :
+- `AuthApplicationService.signUp()` (`RT-comops-auth-core/.../application/service/AuthApplicationService.java:284-344`)
+  vérifie la disponibilité du `UserAccount` (`assertPrincipalAvailability`, ligne 302) mais jamais
+  celle de l'`Actor`, avant d'appeler `createActorUseCase.createActor(...)` (ligne 303-313).
+- `ActorApplicationService.createActor()` (`RT-comops-actor-core/.../ActorApplicationService.java:59-62`)
+  lève `DuplicateActorEmailException` si un Actor actif existe déjà — gérée uniquement dans le
+  contrôleur d'`actor-core` (`ActorExceptionHandler`, scope `ActorController`), pas dans le chemin
+  sign-up (`AuthExceptionHandler` ne connaît que ses propres exceptions `UserAccount`). Elle remonte
+  donc non interceptée → 500.
+- Aucun endpoint KSM n'expose, depuis l'extérieur, un lookup Actor par email/tenant (vérifié
+  exhaustivement sur `ActorController`/`AuthController`/`UserController`) — impossible pour le BFF
+  de détecter ou de réparer ce cas précis sans modifier KSM.
+- Réglages `server.error.include-message`/`include-exception` absents des YAML KSM → défauts Spring
+  Boot, qui **n'exposent pas** le message de l'exception dans le corps JSON d'un 500 non géré — le
+  BFF ne peut donc pas non plus distinguer ce cas d'un autre 500 après coup, par le contenu de la
+  réponse.
+
+**Décision confirmée avec l'utilisateur** : aucune modification de KSM, y compris `auth-core` en
+dérogation ponctuelle (contrairement au point 18.1). Ce cas **reste bloquant** pour l'utilisateur
+concerné tant que KSM n'est pas modifié — limite assumée, pas un oubli.
+
+**Mitigation partielle appliquée côté BFF (ne corrige pas la cause racine)** :
+- `src/server/ksm/modules/auth.ts` : `identifyAccount(principal)` → `POST /api/auth/identify`
+  (endpoint KSM déjà public, non modifié). Appelé en pré-check dans `sign-up/route.ts` avant
+  `authApi.signUp(...)` : si `accountExists === true` → réponse `409 ACCOUNT_MAY_EXIST` invitant à
+  se connecter. **Limite documentée** : cet endpoint est **cross-tenant** côté KSM (pas de filtre
+  par tenant) et ne renseigne que sur les `UserAccount`, jamais sur les `Actor` orphelins — donc
+  il ne détecte **pas** le cas qui plante (Actor sans compte), seulement les cas voisins (compte
+  déjà existant ailleurs sur la plateforme).
+- `sign-up/route.ts` : si `authApi.signUp(...)` échoue avec un statut ≥ 500 (et que le pré-check
+  n'a rien détecté), le message technique brut de KSM est remplacé par un message générique
+  exploitable côté utilisateur, au lieu de le laisser fuiter tel quel.
+
+**Piste de fix réel, si la contrainte de périmètre est un jour levée pour ce cas** (non appliquée) :
+dans `AuthApplicationService.signUp()`, entourer l'appel `createActorUseCase.createActor(...)` d'un
+`.onErrorResume(DuplicateActorEmailException.class, …)` qui retrouve l'Actor existant via
+`ActorRepository.findByTenantId(tenantId)` (méthode **déjà existante** sur ce port, donc `actor-core`
+n'aurait besoin d'aucune modification) filtré par email, pour le réutiliser au lieu de planter.

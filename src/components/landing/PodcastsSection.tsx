@@ -1,14 +1,13 @@
 'use client';
 import { Link } from '@/i18n/navigation';
-import { usePublicFeed } from './PublicFeedProvider';
-import { FeedCard } from './FeedCard';
+import PodcastFeedCard from '@/components/feed/PodcastFeedCard';
+import { STATIC_PODCASTS } from './staticContent';
 import { useSession } from '@/components/providers/session-provider';
 
 export function PodcastsSection() {
-  const { data, loading } = usePublicFeed();
   const { session } = useSession();
   const isLoggedIn = !!session?.user;
-  const items = data.podcasts.slice(0, 3);
+  const spacePrefix = isLoggedIn ? '/reader' : '/public';
   const seeAllHref = isLoggedIn ? '/reader/feed/podcasts' : '/public/podcasts';
 
   return (
@@ -26,11 +25,16 @@ export function PodcastsSection() {
           </Link>
         </div>
         <div className="lv-grid-3">
-          {items.length > 0 ? (
-            items.map((p) => <FeedCard key={p.id} item={p} light />)
-          ) : (
-            <div className="lv-empty">{loading ? 'Chargement des podcasts…' : 'Bientôt de nouveaux épisodes.'}</div>
-          )}
+          {STATIC_PODCASTS.map((p) => (
+            <PodcastFeedCard
+              key={p.id}
+              item={p}
+              spacePrefix={spacePrefix}
+              favorited={false}
+              onToggleFavorite={() => {}}
+              showActions={false}
+            />
+          ))}
         </div>
       </div>
     </section>

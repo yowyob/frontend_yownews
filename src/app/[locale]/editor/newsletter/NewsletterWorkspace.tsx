@@ -1,12 +1,9 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { useEditor, EditorContent, type Editor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import TiptapLink from '@tiptap/extension-link';
-import Placeholder from '@tiptap/extension-placeholder';
 import { apiFetch } from '@/lib/api-client';
 import RowMenu, { type MenuItem } from '@/components/education/RowMenu';
 import NewsletterSubscriptions from '@/components/newsletter/NewsletterSubscriptions';
+import RichTextField, { useRichTextEditor } from '@/components/content-editor/RichTextField';
 
 type RedacteurStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 type NewsletterStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -72,35 +69,6 @@ function RequestForm({ email: initialEmail, onSubmitted }: { email: string; onSu
       }}>
         {busy ? 'Envoi…' : 'Envoyer la demande'}
       </button>
-    </div>
-  );
-}
-
-// ── Barre d'outils TipTap (identique à celle de l'éditeur de blog) ──
-function Toolbar({ editor }: { editor: Editor | null }) {
-  if (!editor) return null;
-  const btn = (active: boolean): React.CSSProperties => ({
-    border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '6px', padding: '5px 9px',
-    fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: active ? 'var(--primary)' : '#fff',
-    color: active ? '#fff' : 'var(--gray-700, #374151)',
-  });
-  const setLink = () => {
-    const prev = editor.getAttributes('link').href as string | undefined;
-    const url = window.prompt('URL du lien', prev ?? 'https://');
-    if (url === null) return;
-    if (url === '') { editor.chain().focus().extendMarkRange('link').unsetLink().run(); return; }
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-  };
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px', borderBottom: '1px solid var(--gray-200, #e5e7eb)' }}>
-      <button type="button" style={btn(editor.isActive('bold'))} onClick={() => editor.chain().focus().toggleBold().run()}><b>B</b></button>
-      <button type="button" style={btn(editor.isActive('italic'))} onClick={() => editor.chain().focus().toggleItalic().run()}><i>I</i></button>
-      <button type="button" style={btn(editor.isActive('heading', { level: 2 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
-      <button type="button" style={btn(editor.isActive('heading', { level: 3 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>H3</button>
-      <button type="button" style={btn(editor.isActive('bulletList'))} onClick={() => editor.chain().focus().toggleBulletList().run()}>• Liste</button>
-      <button type="button" style={btn(editor.isActive('orderedList'))} onClick={() => editor.chain().focus().toggleOrderedList().run()}>1. Liste</button>
-      <button type="button" style={btn(editor.isActive('blockquote'))} onClick={() => editor.chain().focus().toggleBlockquote().run()}>❝</button>
-      <button type="button" style={btn(editor.isActive('link'))} onClick={setLink}>Lien</button>
     </div>
   );
 }
@@ -211,15 +179,7 @@ function ContentSpace({ publication, onBack }: { publication: Publication; onBac
   const [confirmPublishId, setConfirmPublishId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      TiptapLink.configure({ openOnClick: false }),
-      Placeholder.configure({ placeholder: 'Rédigez le contenu…' }),
-    ],
-    content: '',
-    immediatelyRender: false,
-  });
+  const editor = useRichTextEditor({ placeholder: 'Rédigez le contenu…' });
 
   const load = async () => {
     try { setContents(await apiFetch<ContentItem[]>(`/api/newsletter/newsletters/${publication.id}/contents`)); }
@@ -348,24 +308,7 @@ function ContentSpace({ publication, onBack }: { publication: Publication; onBac
               </button>
             )}
           </div>
-          <div>
-            <label style={label}>Contenu</label>
-            <div style={{ border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '10px', overflow: 'hidden', background: '#fff' }}>
-              <Toolbar editor={editor} />
-              <div style={{ padding: '12px 14px', minHeight: '220px' }}>
-                <EditorContent editor={editor} />
-              </div>
-            </div>
-            <style>{`
-              .ProseMirror { outline: none; min-height: 200px; font-size: 15px; line-height: 1.6; }
-              .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9ca3af; float: left; height: 0; pointer-events: none; }
-              .ProseMirror h2 { font-size: 20px; font-weight: 700; margin: 14px 0 8px; }
-              .ProseMirror h3 { font-size: 17px; font-weight: 700; margin: 12px 0 6px; }
-              .ProseMirror ul, .ProseMirror ol { padding-left: 22px; }
-              .ProseMirror blockquote { border-left: 3px solid #e5e7eb; padding-left: 12px; color: #6b7280; }
-              .ProseMirror a { color: #2563eb; text-decoration: underline; }
-            `}</style>
-          </div>
+          <RichTextField editor={editor} label="Contenu" />
           <div style={{ display: 'flex', gap: '10px' }}>
             <button type="button" onClick={submit} disabled={busy} style={{
               border: 'none', borderRadius: '8px', padding: '10px 22px', background: 'var(--accent)',
@@ -574,8 +517,8 @@ export default function NewsletterWorkspace({ email }: { email: string }) {
         {TABS.map((t) => (
           <button key={t.key} type="button" onClick={() => setTab(t.key)} style={{
             padding: '8px 16px', borderRadius: 20,
-            border: `1px solid ${tab === t.key ? 'var(--blue)' : 'var(--gray-200)'}`,
-            background: tab === t.key ? 'var(--blue)' : '#fff',
+            border: `1px solid ${tab === t.key ? 'var(--accent)' : 'var(--gray-200)'}`,
+            background: tab === t.key ? 'var(--accent)' : '#fff',
             color: tab === t.key ? '#fff' : 'var(--gray-600)',
             fontSize: 13, fontWeight: 600, cursor: 'pointer',
           }}>{t.label}</button>

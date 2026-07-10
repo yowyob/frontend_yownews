@@ -1,14 +1,13 @@
 'use client';
 import { Link } from '@/i18n/navigation';
-import { usePublicFeed } from './PublicFeedProvider';
-import { FeedCard } from './FeedCard';
+import ContentFeedCard from '@/components/feed/ContentFeedCard';
+import { STATIC_BLOGS } from './staticContent';
 import { useSession } from '@/components/providers/session-provider';
 
 export function BlogsSection() {
-  const { data, loading } = usePublicFeed();
   const { session } = useSession();
   const isLoggedIn = !!session?.user;
-  const items = data.blogs.slice(0, 3);
+  const spacePrefix = isLoggedIn ? '/reader' : '/public';
   const seeAllHref = isLoggedIn ? '/reader/feed/blogs' : '/public/blogs';
 
   return (
@@ -24,11 +23,16 @@ export function BlogsSection() {
           </Link>
         </div>
         <div className="lv-grid-3">
-          {items.length > 0 ? (
-            items.map((b) => <FeedCard key={b.id} item={b} />)
-          ) : (
-            <div className="lv-empty">{loading ? 'Chargement des articles…' : 'Bientôt de nouveaux articles.'}</div>
-          )}
+          {STATIC_BLOGS.map((b) => (
+            <ContentFeedCard
+              key={b.id}
+              item={b}
+              spacePrefix={spacePrefix}
+              favorited={false}
+              onToggleFavorite={() => {}}
+              showActions={false}
+            />
+          ))}
         </div>
       </div>
     </section>

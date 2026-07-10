@@ -24,19 +24,28 @@ const card: CSSProperties = { background: '#fff', border: '1px solid var(--gray-
 
 function WelcomeBanner({ firstName, subtitle }: { firstName: string; subtitle: string }) {
   return (
-    <div style={{ background: 'linear-gradient(120deg,var(--primary) 0%,var(--blue) 100%)', borderRadius: 16, padding: '28px 32px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ background: 'var(--primary)', borderRadius: 16, padding: '28px 32px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', overflow: 'hidden', position: 'relative' }}>
       <div style={{ position: 'absolute', top: -80, right: 160, width: 300, height: 300, background: 'rgba(255,255,255,.05)', borderRadius: '50%' }} />
       <div style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ fontFamily: 'var(--font-d)', fontSize: 21, fontWeight: 700, color: '#fff', marginBottom: 6 }}>Bonjour, {firstName} 👋</div>
+        <div style={{ fontFamily: 'var(--font-d)', fontSize: 21, fontWeight: 700, color: '#fff', marginBottom: 6 }}>Bonjour, {firstName} </div>
         <div style={{ fontSize: 14, color: 'rgba(255,255,255,.7)' }}>{subtitle}</div>
       </div>
     </div>
   );
 }
 
+// Couleur = sens : bleu landing pour un compteur neutre, orange pour ce qui attend une action.
+const NEUTRAL_COLOR = 'var(--primary)';
+const ATTENTION_COLOR = 'var(--accent)';
+
 function StatCard({ label, value, color, href, sub }: { label: string; value: number | string; color: string; href: string; sub?: string }) {
   return (
-    <Link href={href} style={{ ...card, cursor: 'pointer', display: 'block', textDecoration: 'none' }}>
+    <Link
+      href={href}
+      style={{ ...card, cursor: 'pointer', display: 'block', textDecoration: 'none', transition: 'transform .2s ease, box-shadow .2s ease' }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--sh-md)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'none'; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--sh-sm)'; }}
+    >
       <div style={{ fontFamily: 'var(--font-d)', fontSize: 28, fontWeight: 700, color, lineHeight: 1, marginBottom: 4 }}>{value}</div>
       <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{label}</div>
       {sub && <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 4 }}>{sub}</div>}
@@ -48,19 +57,24 @@ function StatCard({ label, value, color, href, sub }: { label: string; value: nu
 // Carte "Blogs" — deux compteurs (publiés / en attente) dans la même carte.
 function BlogsStatCard({ published, pending, loading }: { published: number; pending: number; loading: boolean }) {
   return (
-    <Link href="/admin/blogs" style={{ ...card, cursor: 'pointer', display: 'block', textDecoration: 'none' }}>
+    <Link
+      href="/admin/blogs"
+      style={{ ...card, cursor: 'pointer', display: 'block', textDecoration: 'none', transition: 'transform .2s ease, box-shadow .2s ease' }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--sh-md)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'none'; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--sh-sm)'; }}
+    >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
         <div>
-          <div style={{ fontFamily: 'var(--font-d)', fontSize: 28, fontWeight: 700, color: '#7C3AED', lineHeight: 1 }}>{loading ? '…' : published}</div>
+          <div style={{ fontFamily: 'var(--font-d)', fontSize: 28, fontWeight: 700, color: NEUTRAL_COLOR, lineHeight: 1 }}>{loading ? '…' : published}</div>
           <div style={{ fontSize: 11, color: 'var(--gray-500)', marginTop: 2 }}>Publiés</div>
         </div>
         <div>
-          <div style={{ fontFamily: 'var(--font-d)', fontSize: 28, fontWeight: 700, color: 'var(--accent)', lineHeight: 1 }}>{loading ? '…' : pending}</div>
+          <div style={{ fontFamily: 'var(--font-d)', fontSize: 28, fontWeight: 700, color: ATTENTION_COLOR, lineHeight: 1 }}>{loading ? '…' : pending}</div>
           <div style={{ fontSize: 11, color: 'var(--gray-500)', marginTop: 2 }}>En attente</div>
         </div>
       </div>
       <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 8 }}>Blogs</div>
-      <div style={{ fontSize: 11, color: '#7C3AED', marginTop: 8, fontFamily: 'var(--font-d)', fontWeight: 600 }}>Voir</div>
+      <div style={{ fontSize: 11, color: NEUTRAL_COLOR, marginTop: 8, fontFamily: 'var(--font-d)', fontWeight: 600 }}>Voir</div>
     </Link>
   );
 }
@@ -123,13 +137,13 @@ function AdminDashboard({ firstName }: { firstName: string }) {
         <StatCard
           label="Utilisateurs"
           value={loading ? '…' : stats.total}
-          color="#1565C0"
+          color={NEUTRAL_COLOR}
           href="/admin/users"
           sub={loading ? undefined : `${pending.length} rédacteur(s) en attente de validation`}
         />
         <BlogsStatCard published={blogCounts.published} pending={blogCounts.pending} loading={loading} />
         <StatCard label="Lecteurs" value={loading ? '…' : stats.readers} color="var(--gray-600)" href="/admin/users" />
-        <StatCard label="Demandes en attente" value={loading ? '…' : pending.length} color="var(--accent)" href="/admin/role-requests" />
+        <StatCard label="Demandes en attente" value={loading ? '…' : pending.length} color={ATTENTION_COLOR} href="/admin/role-requests" />
       </div>
 
       <div style={card}>

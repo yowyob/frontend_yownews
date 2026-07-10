@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { getIronSession } from 'iron-session';
 import { serverEnv } from '@/env';
 import { redis } from '@/server/redis';
+import { getMockSession } from '@/server/mock-session';
 import type { AppSession } from '@/lib/types/auth';
 
 type CookiePayload = { sid?: string; expiresAt?: number };
@@ -22,6 +23,7 @@ const SESSION_OPTIONS = {
 const key = (sid: string) => `app:session:${sid}`;
 
 export async function writeSession(data: AppSession): Promise<string> {
+  if (serverEnv.MOCK_MODE) return data.sid;
   const cookie = await getCookieSession();
   const sid = cookie.sid ?? crypto.randomUUID();
   const ttl = serverEnv.SESSION_TTL_SECONDS;
@@ -33,6 +35,7 @@ export async function writeSession(data: AppSession): Promise<string> {
 }
 
 export async function readSession(): Promise<AppSession | null> {
+  if (serverEnv.MOCK_MODE) return await getMockSession();
   const cookie = await getCookieSession();
   if (!cookie.sid) return null;
   if (cookie.expiresAt && cookie.expiresAt * 1000 < Date.now()) return null;
@@ -51,6 +54,7 @@ export async function readSession(): Promise<AppSession | null> {
 }
 
 export async function destroySession(): Promise<void> {
+  if (serverEnv.MOCK_MODE) return;
   const cookie = await getCookieSession();
   if (cookie.sid) {
     try { await redis().del(key(cookie.sid)); } catch {}
@@ -59,6 +63,7 @@ export async function destroySession(): Promise<void> {
 }
 
 export async function patchSession(patch: Partial<AppSession>): Promise<void> {
+  if (serverEnv.MOCK_MODE) return;
   const cookie = await getCookieSession();
   if (!cookie.sid) return;
   try {

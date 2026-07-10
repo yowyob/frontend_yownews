@@ -142,6 +142,24 @@ export function signUp(input: SignUpInput) {
   });
 }
 
+// ── Identify — vérification best-effort d'un compte existant (cross-tenant, KSM ne filtre pas
+// par tenant sur cet endpoint) ─────────────────────────────────────────────────
+
+export type IdentifyAccountResponse = {
+  principal: string;
+  accountExists: boolean;
+  nextStep?: string;
+  matchingAccountCount?: number;
+};
+
+export function identifyAccount(principal: string) {
+  return callKsm<IdentifyAccountResponse>('/api/auth/identify', {
+    method: 'POST',
+    body: { principal },
+    authenticated: false,
+  });
+}
+
 // ── Sign-up — email verification ──────────────────────────────────────────────
 
 export function confirmEmailVerification(verificationToken: string) {

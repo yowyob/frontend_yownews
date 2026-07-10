@@ -3,7 +3,7 @@ import { serverEnv } from '@/env';
 import { logger } from '@/server/logger';
 import { discoverSignUpContexts } from './modules/auth';
 
-// Resolves the YowNews platform organization id from KSM by its business code.
+// Resolves the Yowyob Education platform organization id from KSM by its business code.
 // The id is authoritative on the KSM side (never hardcoded here); only the code
 // lives in config. Cached for the process lifetime since the id is stable.
 let cached: string | null = null;

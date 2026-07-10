@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { readSession } from '@/server/session';
 import { SessionProvider } from '@/components/providers/session-provider';
 import { roleBadgeLabel, roleVariant } from '@/lib/roles';
+import { serverEnv } from '@/env';
 import AdminSidebar from '../admin/_components/AdminSidebar';
 import AdminTopbar from '../admin/_components/AdminTopbar';
 import type { ClientSession } from '@/lib/types/auth';
@@ -28,7 +29,7 @@ export default async function ReaderLayout({ children }: { children: React.React
           style={{ marginLeft: 'var(--sb-w, 260px)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', overflowY: 'auto', transition: 'margin-left .3s ease' }}
           className="admin-main"
         >
-          <AdminTopbar displayName={displayName} />
+          <AdminTopbar displayName={displayName} variant={roleVariant(session.user.permissions ?? session.user.roles)} mockMode={serverEnv.MOCK_MODE} />
           <main style={{ flex: 1, padding: '28px 32px' }}>{children}</main>
         </div>
       </div>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { coverPathFor } from './contentLinks';
+import CoverFallback from './CoverFallback';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useSessionUser } from '@/components/providers/session-provider';
 
@@ -63,7 +64,7 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
   const [busy, setBusy] = useState(false);
   const [coverFailed, setCoverFailed] = useState(false);
 
-  const supportsRatings = contentType === 'BLOG' || contentType === 'PODCAST';
+  const supportsRatings = true; // Blogs, podcasts et cours peuvent tous être évalués (like/dislike + commentaires).
   const [ratingStats, setRatingStats] = useState<RatingStats | null>(null);
   const [ratingBusy, setRatingBusy] = useState(false);
   const [comments, setComments] = useState<CommentEntity[]>([]);
@@ -233,6 +234,19 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
     return () => { cancelled = true; };
   }, [authorRedacteur]);
 
+  const [shareCopied, setShareCopied] = useState(false);
+  const handleShare = async () => {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try { await navigator.share({ title: item?.title, url: window.location.href }); } catch { /* annulé */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch { /* presse-papiers indisponible */ }
+  };
+
   const subscribeToRedacteur = () => {
     if (!authorRedacteur || subscribeBusy) return;
     setModalEmail(sessionUser?.email ?? '');
@@ -377,7 +391,7 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
 
   if (error) {
     return (
-      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '14px 16px', borderRadius: '10px', background: '#FEF2F2', color: '#B91C1C', fontSize: '14px' }}>
+      <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '14px 16px', borderRadius: '10px', background: '#FEF2F2', color: '#B91C1C', fontSize: '14px' }}>
         {error}
       </div>
     );
@@ -390,331 +404,430 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
   const authorLabel = authorName ?? (item.authorId ? `${item.authorId.slice(0, 8)}…` : 'Auteur inconnu');
   const body = contentType === 'PODCAST' ? item.transcript : item.content;
   const allTags = [...(item.tags ?? []), ...(item.freeTags ?? [])];
+  // Le contenu réel (TipTap) est déjà du HTML valide ; seules les données de démo (texte
+  // brut avec \n\n) ont besoin d'être reformatées en paragraphes.
+  const looksLikeHtml = !!body && /<[a-z][\s\S]*>/i.test(body);
+  const bodyHtml = body
+    ? looksLikeHtml
+      ? body
+      : body.split(/\n{2,}/).map((p) => `<p>${p.replace(/\n/g, '<br/>')}</p>`).join('')
+    : '<p><em>Aucun contenu.</em></p>';
+
+  const showFollow = !!(followCounts && sessionUser && sessionUser.id !== item.authorId);
+  const showSubscribe = !!(sessionUser && authorRedacteur);
 
   return (
-    <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-      <div style={{ background: '#fff', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '16px', overflow: 'hidden' }}>
-        {!coverFailed && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={coverPathFor(contentType, id)}
-            alt=""
-            onError={() => setCoverFailed(true)}
-            style={{ width: '100%', maxHeight: '320px', objectFit: 'cover', display: 'block' }}
-          />
-        )}
-        <div style={{ padding: '28px 32px' }}>
+    <div style={{ maxWidth: '1180px', margin: '0 auto', background: '#fff' }}>
+      <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 18rem', columnGap: '64px' }}>
+        {/* Colonne principale : article */}
+        <article style={{ maxWidth: '68ch' }}>
+          <div style={{ position: 'relative', height: '200px', borderRadius: '8px', overflow: 'hidden', marginBottom: '40px', background: 'var(--gray-100, #f3f4f6)' }}>
+            {coverFailed ? (
+              <CoverFallback id={id} title={item.title} contentType={contentType} />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={coverPathFor(contentType, id)}
+                alt=""
+                onError={() => setCoverFailed(true)}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            )}
+          </div>
+
           {allTags.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-              {allTags.map((t) => (
-                <span key={t} style={{ fontSize: '12px', color: 'var(--blue, #2563eb)', background: 'rgba(37,99,235,.07)', padding: '2px 8px', borderRadius: '20px' }}>#{t}</span>
-              ))}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+              {allTags.map((t) => <Tag key={t}>#{t}</Tag>)}
             </div>
           )}
-          <span style={{
-            fontSize: '11px', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase',
-            color: 'var(--accent)', background: 'rgba(239,68,68,.08)', padding: '3px 9px', borderRadius: '20px',
-          }}>
+
+          <p style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--accent)', fontWeight: 700, margin: '0 0 18px' }}>
             {TYPE_LABELS[contentType]}
-          </span>
-          <h1 style={{ fontFamily: 'var(--font-d)', fontSize: '28px', fontWeight: 800, margin: '12px 0 16px' }}>{item.title}</h1>
+          </p>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
-            <Link
-              href={sessionUser ? `/profile/${item.authorId}` : '/auth/login'}
-              onClick={(e) => { if (!sessionUser) { e.preventDefault(); router.push('/auth/login'); } }}
-              style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'inherit', textDecoration: 'none' }}
-            >
-              <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'linear-gradient(135deg,var(--blue),var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '13px', color: '#fff', flexShrink: 0 }}>
-                {initials(authorLabel)}
+          <h1 style={{ fontFamily: 'var(--font-d)', fontSize: 'clamp(30px,4vw,44px)', fontWeight: 800, lineHeight: 1.1, letterSpacing: '-.01em', margin: 0, color: 'var(--dark, #111827)' }}>
+            {item.title}
+          </h1>
+
+          {item.description && (
+            <p style={{ marginTop: '18px', fontSize: '17px', lineHeight: 1.7, color: 'var(--gray-500, #6b7280)' }}>{item.description}</p>
+          )}
+
+          {contentType === 'PODCAST' && (
+            <div style={{ marginTop: '24px', padding: '18px 20px', borderRadius: '14px', background: 'var(--gray-50, #f8fafc)', border: '1px solid var(--gray-100, #f3f4f6)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                <span style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="14" height="14" fill="none" stroke="#fff" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 1a4 4 0 00-4 4v6a4 4 0 008 0V5a4 4 0 00-4-4zM5 10v1a7 7 0 0014 0v-1M12 18v4M8 22h8"/></svg>
+                </span>
+                <span style={{ fontFamily: 'var(--font-d)', fontSize: '13px', fontWeight: 700, color: 'var(--dark, #111827)' }}>Écouter l&apos;épisode</span>
               </div>
-            </Link>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: 'var(--font-d)', fontSize: '13px', fontWeight: 700 }}>
-                <Link
-                  href={sessionUser ? `/profile/${item.authorId}` : '/auth/login'}
-                  onClick={(e) => { if (!sessionUser) { e.preventDefault(); router.push('/auth/login'); } }}
-                  style={{ color: 'inherit', textDecoration: 'none' }}
-                  className="hover:underline"
-                >
-                  {authorLabel}
-                </Link>
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--gray-500, #6b7280)' }}>
-                {formatDate(item.publishedAt ?? item.createdAt)}
-                {item.readingTime ? ` · ${item.readingTime} min de lecture` : ''}
-              </div>
+              <audio controls src={`/api/education/podcasts/${id}/audio`} className="podcast-audio" style={{ width: '100%' }} />
             </div>
-            {followCounts && sessionUser && sessionUser.id !== item.authorId && (
-              <button
-                type="button"
-                onClick={handleFollowToggle}
-                disabled={followBusy}
-                style={{
-                  border: '1px solid var(--blue, #2563eb)', borderRadius: '20px', padding: '4px 12px', fontSize: '12px', fontWeight: 700,
-                  background: followCounts.isFollowing ? 'var(--blue, #2563eb)' : '#fff', color: followCounts.isFollowing ? '#fff' : 'var(--blue, #2563eb)',
-                  cursor: 'pointer', flexShrink: 0, marginRight: '8px'
-                }}
-              >
-                {followCounts.isFollowing ? 'Suivi' : 'Suivre'}
-              </button>
-            )}
-            {sessionUser && authorRedacteur && (
-              <button
-                type="button"
-                onClick={subscribeToRedacteur}
-                disabled={subscribeBusy || subscribed}
-                style={{
-                  border: '1px solid var(--accent)', borderRadius: '20px', padding: '6px 14px', fontSize: '12.5px', fontWeight: 700,
-                  background: subscribed ? 'var(--accent)' : '#fff', color: subscribed ? '#fff' : 'var(--accent)',
-                  cursor: subscribed ? 'default' : 'pointer', flexShrink: 0,
-                }}
-              >
-                {subscribed ? 'Abonné' : 'S’abonner à ma newsletter'}
-              </button>
-            )}
-          </div>
+          )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '18px', paddingBottom: '16px', borderBottom: '1px solid var(--gray-200, #e5e7eb)' }}>
-            <button
-              type="button"
-              onClick={toggleFavorite}
-              title={favorited ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', border: 'none', background: 'none', cursor: 'pointer', padding: '4px', color: favorited ? 'var(--accent)' : 'var(--gray-400, #9ca3af)', fontSize: '13px' }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill={favorited ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-                <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z"/>
-              </svg>
-              {favorited ? 'Favori' : 'Ajouter aux favoris'}
-            </button>
-          </div>
-
-          {/* Course Enrollment & Progress */}
+          {/* Inscription / progression du cours — sans carte, sans dégradé */}
           {contentType === 'COURSE' && courseProgress && (
-            <>
+            <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--gray-100, #f3f4f6)' }}>
               {!courseProgress.enrolled ? (
-                <div style={{
-                  background: 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(239,68,68,0.05))',
-                  border: '1px solid var(--gray-200, #e5e7eb)',
-                  borderRadius: '12px',
-                  padding: '24px',
-                  textAlign: 'center',
-                  marginBottom: '24px'
-                }}>
-                  <h3 style={{ fontFamily: 'var(--font-d)', fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Prêt à commencer ce cours ?</h3>
-                  <p style={{ color: 'var(--gray-600)', fontSize: '14px', marginBottom: '16px' }}>Inscrivez-vous pour suivre votre progression et valider les chapitres.</p>
+                <div>
+                  <p style={{ fontSize: '14px', color: 'var(--gray-500, #6b7280)', marginBottom: '14px' }}>
+                    Inscrivez-vous pour suivre votre progression et valider les chapitres.
+                  </p>
                   <button
                     type="button"
                     onClick={handleEnroll}
                     disabled={courseBusy}
-                    style={{
-                      border: 'none', borderRadius: '24px', padding: '10px 24px', fontSize: '14px', fontWeight: 700,
-                      background: 'var(--blue, #2563eb)', color: '#fff', cursor: 'pointer'
-                    }}
+                    style={{ border: 'none', borderRadius: '24px', padding: '10px 22px', fontSize: '13px', fontWeight: 700, background: 'var(--accent)', color: '#fff', cursor: 'pointer' }}
                   >
                     S&apos;inscrire au cours
                   </button>
                 </div>
               ) : (
-                <div style={{
-                  background: '#f8fafc',
-                  border: '1px solid var(--gray-200, #e5e7eb)',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  marginBottom: '24px'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--gray-700)' }}>Votre Progression</span>
-                    <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--blue)' }}>{courseProgress.percent}%</span>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--gray-700, #374151)' }}>Votre progression</span>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--accent)' }}>{courseProgress.percent}%</span>
                   </div>
-                  <div style={{ width: '100%', height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden', marginBottom: '16px' }}>
-                    <div style={{ width: `${courseProgress.percent}%`, height: '100%', background: 'var(--blue, #2563eb)', borderRadius: '4px', transition: 'width 0.3s ease' }} />
+                  <div style={{ width: '100%', height: '6px', background: 'var(--gray-100, #f3f4f6)', borderRadius: '3px', overflow: 'hidden', marginBottom: '20px' }}>
+                    <div style={{ width: `${courseProgress.percent}%`, height: '100%', background: 'var(--accent)', borderRadius: '3px', transition: 'width .3s ease' }} />
                   </div>
-
-                  <h4 style={{ fontFamily: 'var(--font-d)', fontSize: '14px', fontWeight: 700, marginBottom: '12px', color: 'var(--gray-700)' }}>Chapitres du cours :</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {courseUnits.map((unit) => {
                       const isCompleted = courseProgress.completedUnitIds.includes(unit.id);
                       return (
-                        <div key={unit.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: '#fff', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
-                          <input
-                            type="checkbox"
-                            checked={isCompleted}
-                            onChange={() => handleCompleteUnit(unit.id)}
-                            disabled={courseBusy}
-                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                          />
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '13.5px', fontWeight: 600, color: isCompleted ? 'var(--gray-500)' : 'var(--gray-800)', textDecoration: isCompleted ? 'line-through' : 'none' }}>
-                              {unit.title}
-                            </div>
-                            {unit.duration && (
-                              <span style={{ fontSize: '11px', color: 'var(--gray-400)' }}>{unit.duration} min</span>
-                            )}
-                          </div>
-                        </div>
+                        <label id={`unit-${unit.id}`} key={unit.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', cursor: courseBusy ? 'default' : 'pointer', scrollMarginTop: '20px' }}>
+                          <input type="checkbox" checked={isCompleted} onChange={() => handleCompleteUnit(unit.id)} disabled={courseBusy} style={{ width: '16px', height: '16px', cursor: 'inherit', accentColor: 'var(--accent)' }} />
+                          <span style={{ color: isCompleted ? 'var(--gray-400, #9ca3af)' : 'var(--gray-800, #1f2937)', textDecoration: isCompleted ? 'line-through' : 'none' }}>{unit.title}</span>
+                          {unit.duration && <span style={{ fontSize: '12px', color: 'var(--gray-400, #9ca3af)' }}>· {unit.duration} min</span>}
+                        </label>
                       );
                     })}
                     {courseUnits.length === 0 && (
-                      <p style={{ fontSize: '12px', color: 'var(--gray-400)' }}>Aucun chapitre disponible pour le moment.</p>
+                      <p style={{ fontSize: '12px', color: 'var(--gray-400, #9ca3af)' }}>Aucun chapitre disponible pour le moment.</p>
                     )}
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
 
-          {item.description && (
-            <p style={{ color: 'var(--gray-600, #4b5563)', fontSize: '15px', marginBottom: '16px' }}>{item.description}</p>
+          {contentType === 'PODCAST' && body && (
+            <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '18px', fontWeight: 700, margin: '40px 0 0', color: 'var(--dark, #111827)' }}>Transcription</h2>
           )}
-          {contentType === 'PODCAST' && (
-            <audio
-              controls
-              src={`/api/education/podcasts/${id}/audio`}
-              style={{ width: '100%', marginBottom: '20px', borderRadius: '8px' }}
-            />
-          )}
-          <div className="content-detail-body" style={{ fontSize: '15px', lineHeight: 1.7, color: 'var(--gray-800, #1f2937)' }}
-            dangerouslySetInnerHTML={{ __html: body ? body.replace(/\n/g, '<br/>') : '<p><em>Aucun contenu.</em></p>' }} />
+          <div
+            className="content-detail-body"
+            style={{ marginTop: contentType === 'PODCAST' ? '16px' : '40px', fontSize: '17px', lineHeight: 1.75, color: 'var(--gray-700, #374151)' }}
+            dangerouslySetInnerHTML={{ __html: bodyHtml }}
+          />
 
+          {/* Réactions — inline, sans carte */}
           {supportsRatings && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginTop: '28px', paddingTop: '20px', borderTop: '1px solid var(--gray-200, #e5e7eb)' }}>
+            <div style={{ marginTop: '40px', display: 'flex', alignItems: 'center', gap: '24px' }}>
+              <button
+                type="button"
+                onClick={() => sendReaction(true)}
+                disabled={ratingBusy || !ratingStats}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', cursor: ratingBusy ? 'default' : 'pointer', padding: 0, color: ratingStats?.hasLiked ? 'var(--accent)' : 'var(--gray-500, #6b7280)', fontSize: '14px' }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={ratingStats?.hasLiked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
+                J&apos;aime{ratingStats && ratingStats.totalLikes > 0 ? ` (${ratingStats.totalLikes})` : ''}
+              </button>
+              <button
+                type="button"
+                onClick={() => sendReaction(false)}
+                disabled={ratingBusy || !ratingStats}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', cursor: ratingBusy ? 'default' : 'pointer', padding: 0, color: ratingStats?.hasDisliked ? 'var(--dark, #111827)' : 'var(--gray-500, #6b7280)', fontSize: '14px' }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={ratingStats?.hasDisliked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" style={{ transform: 'scaleY(-1)' }}><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
+                Je n&apos;aime pas
+              </button>
+            </div>
+          )}
+        </article>
+
+        {/* Colonne latérale : méta / auteur / actions — sans carte, collante */}
+        <aside className="detail-aside" style={{ alignSelf: 'start' }}>
+          <div style={{ marginBottom: '32px' }}>
+            <p className="eyebrow">Auteur</p>
+            <Link
+              href={sessionUser ? `/profile/${item.authorId}` : '/auth/login'}
+              onClick={(e) => { if (!sessionUser) { e.preventDefault(); router.push('/auth/login'); } }}
+              style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'inherit', textDecoration: 'none' }}
+            >
+              <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'var(--primary, #1F5FBF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 700, fontSize: '14px', color: '#fff', flexShrink: 0 }}>
+                {initials(authorLabel)}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontWeight: 600, fontSize: '14px', margin: 0, color: 'var(--dark, #111827)' }} className="hover:underline">{authorLabel}</p>
+                <p style={{ fontSize: '12px', color: 'var(--gray-500, #6b7280)', margin: 0 }}>Auteur</p>
+              </div>
+            </Link>
+          </div>
+
+          {contentType === 'COURSE' && courseUnits.length > 0 && (
+            <div style={{ marginBottom: '32px' }}>
+              <p className="eyebrow">Programme du cours</p>
+              <p style={{ fontWeight: 700, fontSize: '14px', margin: '0 0 12px', color: 'var(--dark, #111827)' }}>{item.title}</p>
+              <ol style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: 0, padding: 0, listStyle: 'none' }}>
+                {courseUnits.map((unit, i) => {
+                  const isCompleted = courseProgress?.completedUnitIds.includes(unit.id);
+                  return (
+                    <li key={unit.id}>
+                      <a
+                        href={`#unit-${unit.id}`}
+                        style={{ display: 'flex', alignItems: 'baseline', gap: '8px', fontSize: '13px', textDecoration: 'none', color: isCompleted ? 'var(--gray-400, #9ca3af)' : 'var(--gray-700, #374151)' }}
+                      >
+                        <span style={{ flexShrink: 0, color: 'var(--gray-400, #9ca3af)' }}>{i + 1}.</span>
+                        <span style={{ textDecoration: isCompleted ? 'line-through' : 'none' }}>{unit.title}</span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          )}
+
+          <div style={{ marginBottom: '32px' }}>
+            <p className="eyebrow">Publié</p>
+            <p style={{ fontFamily: 'var(--font-d)', fontSize: '17px', margin: '0 0 4px', color: 'var(--dark, #111827)' }}>{formatDate(item.publishedAt ?? item.createdAt)}</p>
+            {item.readingTime ? (
+              <p style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--gray-500, #6b7280)', margin: 0 }}>
+                <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                {item.readingTime} min de lecture
+              </p>
+            ) : null}
+          </div>
+
+          <div style={{ marginBottom: '32px' }}>
+            <p className="eyebrow">Actions</p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={toggleFavorite}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', cursor: 'pointer', padding: 0, fontSize: '14px', color: favorited ? 'var(--accent)' : 'var(--gray-700, #374151)' }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={favorited ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z"/></svg>
+                {favorited ? 'Enregistré' : 'Ajouter aux favoris'}
+              </button>
+              <button
+                type="button"
+                onClick={handleShare}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', cursor: 'pointer', padding: 0, fontSize: '14px', color: 'var(--gray-700, #374151)' }}
+              >
+                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 3.9M15.4 6.6L8.6 10.5"/></svg>
+                {shareCopied ? 'Lien copié !' : 'Partager'}
+              </button>
+            </div>
+          </div>
+
+          {(showFollow || showSubscribe) && (
+            <div>
+              <p className="eyebrow">Restez connecté</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {showFollow && (
+                  <button
+                    type="button"
+                    onClick={handleFollowToggle}
+                    disabled={followBusy}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600,
+                      padding: '8px 14px', borderRadius: '20px', cursor: 'pointer', transition: 'all .2s',
+                      border: `1px solid ${followCounts?.isFollowing ? 'var(--accent)' : 'var(--gray-200, #e5e7eb)'}`,
+                      background: followCounts?.isFollowing ? 'var(--accent)' : 'transparent',
+                      color: followCounts?.isFollowing ? '#fff' : 'var(--gray-700, #374151)',
+                    }}
+                  >
+                    <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+                    {followCounts?.isFollowing ? 'Suivi' : 'Suivre'}
+                  </button>
+                )}
+                {showSubscribe && (
+                  <button
+                    type="button"
+                    onClick={subscribeToRedacteur}
+                    disabled={subscribeBusy || subscribed}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600,
+                      padding: '8px 14px', borderRadius: '20px', cursor: subscribed ? 'default' : 'pointer', transition: 'all .2s',
+                      border: `1px solid ${subscribed ? 'var(--accent)' : 'var(--gray-200, #e5e7eb)'}`,
+                      background: subscribed ? 'var(--accent)' : 'transparent',
+                      color: subscribed ? '#fff' : 'var(--gray-700, #374151)',
+                    }}
+                  >
+                    <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+                    {subscribed ? 'Abonné' : "S'abonner à ma newsletter"}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </aside>
+      </div>
+
+      {/* Commentaires — pleine largeur, sans carte */}
+      {supportsRatings && (
+        <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 18rem', columnGap: '64px', marginTop: '56px', paddingBottom: '80px' }}>
+          <div style={{ maxWidth: '68ch' }}>
+            <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '24px', fontWeight: 800, letterSpacing: '-.01em', margin: '0 0 24px', color: 'var(--dark, #111827)' }}>
+              Commentaires {comments.length > 0 ? `(${comments.length})` : ''}
+            </h2>
+
+            {sessionUser ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '28px' }}>
+                <input
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Ajouter un commentaire…"
+                  style={{ flex: 1, background: 'var(--gray-50, #f8fafc)', border: 'none', borderRadius: '999px', padding: '12px 18px', fontSize: '14px', outline: 'none' }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') submitComment(); }}
+                />
                 <button
                   type="button"
-                  onClick={() => sendReaction(true)}
-                  disabled={ratingBusy || !ratingStats}
-                  title="J'aime"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', border: 'none', background: 'none', cursor: ratingBusy ? 'default' : 'pointer', padding: '4px', color: ratingStats?.hasLiked ? 'var(--accent)' : 'var(--gray-500, #6b7280)', fontSize: '14px', fontWeight: 600 }}
+                  onClick={submitComment}
+                  disabled={commentBusy || !newComment.trim()}
+                  style={{ border: 'none', borderRadius: '999px', padding: '12px 22px', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: '13px', cursor: commentBusy ? 'default' : 'pointer', opacity: newComment.trim() ? 1 : 0.6, whiteSpace: 'nowrap' }}
                 >
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill={ratingStats?.hasLiked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
-                  J&apos;aime
-                </button>
-                <button
-                  type="button"
-                  onClick={() => sendReaction(false)}
-                  disabled={ratingBusy || !ratingStats}
-                  title="Je n'aime pas"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', border: 'none', background: 'none', cursor: ratingBusy ? 'default' : 'pointer', padding: '4px', color: ratingStats?.hasDisliked ? 'var(--blue, #2563eb)' : 'var(--gray-500, #6b7280)', fontSize: '14px', fontWeight: 600 }}
-                >
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill={ratingStats?.hasDisliked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" style={{ transform: 'scaleY(-1)' }}><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
-                  Je n&apos;aime pas
+                  Publier
                 </button>
               </div>
+            ) : (
+              <p style={{ fontSize: '13px', color: 'var(--gray-500, #6b7280)', marginBottom: '28px' }}>
+                <Link href="/auth/login" style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'underline' }}>Connectez-vous</Link> pour participer à la discussion.
+              </p>
+            )}
 
-              <div style={{ marginTop: '24px' }}>
-                <h3 style={{ fontFamily: 'var(--font-d)', fontSize: '16px', fontWeight: 700, margin: '0 0 12px' }}>
-                  Commentaires {comments.length > 0 ? `(${comments.length})` : ''}
-                </h3>
-                {sessionUser ? (
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '18px' }}>
-                    <input
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      placeholder="Ajouter un commentaire…"
-                      style={{ flex: 1, border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '8px', padding: '9px 12px', fontSize: '14px' }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') submitComment(); }}
-                    />
-                    <button
-                      type="button"
-                      onClick={submitComment}
-                      disabled={commentBusy || !newComment.trim()}
-                      style={{ border: 'none', borderRadius: '8px', padding: '0 16px', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: '13px', cursor: commentBusy ? 'default' : 'pointer', opacity: newComment.trim() ? 1 : 0.6 }}
-                    >
-                      Publier
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ padding: '12px 14px', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '8px', fontSize: '13px', color: '#6B7280', marginBottom: '18px', display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <span>Veuillez vous </span>
-                    <Link href="/auth/login" style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'underline' }}>connecter</Link>
-                    <span> pour participer à la discussion.</span>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {comments.length === 0 && (
-                    <p style={{ color: 'var(--gray-400, #9ca3af)', fontSize: '13px' }}>Aucun commentaire pour l&apos;instant.</p>
-                  )}
-                  {comments.map((c) => {
-                    const replies = openReplies[c.id];
-                    const formOpen = replyFormOpen[c.id] ?? false;
-                    const draft = replyDrafts[c.id] ?? '';
-                    const authorLabel = c.commentByName || c.commentByUser.slice(0, 8);
-                    return (
-                      <div key={c.id} style={{ paddingBottom: '12px', borderBottom: '1px solid var(--gray-100, #f3f4f6)' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--gray-200, #e5e7eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: 'var(--gray-600, #4b5563)', flexShrink: 0 }}>
-                            {initials(authorLabel)}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--gray-700, #374151)', marginBottom: '2px' }}>{authorLabel}</div>
-                            <div style={{ fontSize: '13.5px', color: 'var(--gray-800, #1f2937)' }}>{c.content}</div>
-                            <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
-                              <span style={{ fontSize: '11px', color: 'var(--gray-400, #9ca3af)' }}>{formatDate(c.createdAt)}</span>
-                              {sessionUser && (
-                                <>
-                                  {replies !== undefined
-                                    ? <button type="button" onClick={() => hideReplies(c.id)} style={{ border: 'none', background: 'none', color: 'var(--gray-500, #6b7280)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Masquer les réponses</button>
-                                    : <button type="button" onClick={() => openReplyForm(c.id)} style={{ border: 'none', background: 'none', color: 'var(--gray-500, #6b7280)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Répondre</button>
-                                  }
-                                  {sessionUser.id === c.commentByUser && (
-                                    <button type="button" onClick={() => deleteComment(c.id)} style={{ border: 'none', background: 'none', color: 'var(--gray-400, #9ca3af)', fontSize: '11px', cursor: 'pointer', padding: 0 }}>
-                                      Supprimer
-                                    </button>
-                                  )}
-                                </>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {comments.length === 0 && (
+                <p style={{ color: 'var(--gray-400, #9ca3af)', fontSize: '13px' }}>Aucun commentaire pour l&apos;instant.</p>
+              )}
+              {comments.map((c) => {
+                const replies = openReplies[c.id];
+                const formOpen = replyFormOpen[c.id] ?? false;
+                const draft = replyDrafts[c.id] ?? '';
+                const cAuthorLabel = c.commentByName || c.commentByUser.slice(0, 8);
+                return (
+                  <div key={c.id}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--gray-200, #e5e7eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: 'var(--gray-600, #4b5563)', flexShrink: 0 }}>
+                        {initials(cAuthorLabel)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--gray-700, #374151)', marginBottom: '2px' }}>{cAuthorLabel}</div>
+                        <div style={{ fontSize: '14px', color: 'var(--gray-800, #1f2937)', lineHeight: 1.5 }}>{c.content}</div>
+                        <div style={{ display: 'flex', gap: '14px', marginTop: '6px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--gray-400, #9ca3af)' }}>{formatDate(c.createdAt)}</span>
+                          {sessionUser && (
+                            <>
+                              {replies !== undefined
+                                ? <button type="button" onClick={() => hideReplies(c.id)} style={{ border: 'none', background: 'none', color: 'var(--gray-500, #6b7280)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Masquer les réponses</button>
+                                : <button type="button" onClick={() => openReplyForm(c.id)} style={{ border: 'none', background: 'none', color: 'var(--gray-500, #6b7280)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Répondre</button>
+                              }
+                              {sessionUser.id === c.commentByUser && (
+                                <button type="button" onClick={() => deleteComment(c.id)} style={{ border: 'none', background: 'none', color: 'var(--gray-400, #9ca3af)', fontSize: '11px', cursor: 'pointer', padding: 0 }}>
+                                  Supprimer
+                                </button>
                               )}
-                            </div>
+                            </>
+                          )}
+                        </div>
 
-                            {replies !== undefined && (
-                              <div style={{ marginTop: '10px', paddingLeft: '14px', borderLeft: '2px solid var(--gray-100, #f3f4f6)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {replies.map((r) => (
-                                  <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'flex-start' }}>
-                                    <div>
-                                      {r.replyByName && <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--gray-600, #4b5563)', marginBottom: '1px' }}>{r.replyByName}</div>}
-                                      <div style={{ fontSize: '13px', color: 'var(--gray-700, #374151)' }}>{r.content}</div>
-                                    </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
-                                      <button type="button" onClick={() => openReplyForm(c.id)} style={{ border: 'none', background: 'none', color: 'var(--gray-500, #6b7280)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Répondre</button>
-                                      <button type="button" onClick={() => deleteReply(c.id, r.id)} style={{ border: 'none', background: 'none', color: 'var(--gray-400, #9ca3af)', fontSize: '11px', cursor: 'pointer', padding: 0 }}>Supprimer</button>
-                                    </div>
-                                  </div>
-                                ))}
-                                {formOpen && (
-                                  <div style={{ display: 'flex', gap: '6px' }}>
-                                    <input
-                                      value={draft}
-                                      onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [c.id]: e.target.value }))}
-                                      placeholder="Répondre à ce commentaire…"
-                                      style={{ flex: 1, border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '6px', padding: '6px 10px', fontSize: '13px' }}
-                                      onKeyDown={(e) => { if (e.key === 'Enter') submitReply(c.id); }}
-                                    />
-                                    <button type="button" onClick={() => submitReply(c.id)} disabled={!draft.trim()} style={{ border: 'none', borderRadius: '6px', padding: '0 12px', background: 'var(--gray-100, #f3f4f6)', color: 'var(--gray-700, #374151)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
-                                      Envoyer
-                                    </button>
-                                  </div>
-                                )}
+                        {replies !== undefined && (
+                          <div style={{ marginTop: '12px', paddingLeft: '16px', borderLeft: '2px solid var(--gray-100, #f3f4f6)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {replies.map((r) => (
+                              <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'flex-start' }}>
+                                <div>
+                                  {r.replyByName && <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--gray-600, #4b5563)', marginBottom: '1px' }}>{r.replyByName}</div>}
+                                  <div style={{ fontSize: '13px', color: 'var(--gray-700, #374151)' }}>{r.content}</div>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
+                                  <button type="button" onClick={() => openReplyForm(c.id)} style={{ border: 'none', background: 'none', color: 'var(--gray-500, #6b7280)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Répondre</button>
+                                  <button type="button" onClick={() => deleteReply(c.id, r.id)} style={{ border: 'none', background: 'none', color: 'var(--gray-400, #9ca3af)', fontSize: '11px', cursor: 'pointer', padding: 0 }}>Supprimer</button>
+                                </div>
+                              </div>
+                            ))}
+                            {formOpen && (
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <input
+                                  value={draft}
+                                  onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                                  placeholder="Répondre à ce commentaire…"
+                                  style={{ flex: 1, background: 'var(--gray-50, #f8fafc)', border: 'none', borderRadius: '999px', padding: '8px 14px', fontSize: '13px', outline: 'none' }}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') submitReply(c.id); }}
+                                />
+                                <button type="button" onClick={() => submitReply(c.id)} disabled={!draft.trim()} style={{ border: 'none', borderRadius: '999px', padding: '0 14px', background: 'var(--gray-100, #f3f4f6)', color: 'var(--gray-700, #374151)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+                                  Envoyer
+                                </button>
                               </div>
                             )}
                           </div>
-                        </div>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Modal d'abonnement newsletter */}
+      {showSubscribeModal && authorRedacteur && (
+        <div
+          onClick={() => setShowSubscribeModal(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '0 12px 40px rgba(0,0,0,.25)' }}>
+            <h3 style={{ fontFamily: 'var(--font-d)', fontSize: '16px', fontWeight: 700, margin: '0 0 4px', color: 'var(--dark, #111827)' }}>
+              S&apos;abonner à la newsletter de {authorRedacteur.prenom}
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--gray-500, #6b7280)', margin: '0 0 16px' }}>Recevez ses prochaines publications par email.</p>
+            <input
+              type="email"
+              value={modalEmail}
+              onChange={(e) => setModalEmail(e.target.value)}
+              placeholder="votre@email.com"
+              style={{ width: '100%', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', boxSizing: 'border-box', marginBottom: '16px' }}
+            />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => setShowSubscribeModal(false)} style={{ border: 'none', background: 'none', color: 'var(--gray-500, #6b7280)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: '8px 12px' }}>Annuler</button>
+              <button
+                type="button"
+                onClick={handleSubscribeSubmit}
+                disabled={subscribeBusy || !modalEmail.trim()}
+                style={{ border: 'none', borderRadius: '8px', padding: '8px 18px', background: 'var(--accent)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: subscribeBusy ? 'default' : 'pointer', opacity: modalEmail.trim() ? 1 : 0.5 }}
+              >
+                S&apos;abonner
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
-        .content-detail-body h2 { font-size: 20px; font-weight: 700; margin: 16px 0 8px; }
-        .content-detail-body h3 { font-size: 17px; font-weight: 700; margin: 12px 0 6px; }
-        .content-detail-body ul, .content-detail-body ol { padding-left: 22px; }
-        .content-detail-body blockquote { border-left: 3px solid #e5e7eb; padding-left: 12px; color: #6b7280; }
-        .content-detail-body a { color: #2563eb; text-decoration: underline; }
+        .detail-aside .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--gray-400, #9ca3af); margin: 0 0 10px; }
+        .content-detail-body p { margin: 0 0 20px; }
+        .content-detail-body h2 { font-size: 22px; font-weight: 700; margin: 28px 0 12px; }
+        .content-detail-body h3 { font-size: 18px; font-weight: 700; margin: 20px 0 10px; }
+        .content-detail-body ul, .content-detail-body ol { padding-left: 22px; margin: 0 0 20px; }
+        .content-detail-body blockquote { border-left: 3px solid var(--gray-200, #e5e7eb); padding-left: 16px; color: var(--gray-500, #6b7280); font-style: italic; }
+        .content-detail-body a { color: var(--accent); text-decoration: underline; }
+        .podcast-audio { accent-color: var(--accent); border-radius: 8px; }
+        .podcast-audio::-webkit-media-controls-panel { background: #fff; }
+        @media(min-width: 1024px) { .detail-aside { position: sticky; top: 32px; } }
+        @media(max-width: 900px) {
+          .detail-grid { grid-template-columns: 1fr!important; }
+          .detail-aside { position: static!important; margin-top: 40px; }
+        }
       `}</style>
     </div>
+  );
+}
+
+function Tag({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '999px', background: 'var(--gray-100, #f3f4f6)', color: 'var(--gray-600, #4b5563)' }}>
+      {children}
+    </span>
   );
 }

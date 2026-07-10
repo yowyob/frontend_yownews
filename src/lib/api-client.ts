@@ -26,10 +26,10 @@ export async function apiFetch<T>(path: string, init: ClientRequestInit = {}): P
   if (json && body !== undefined) finalHeaders['Content-Type'] = 'application/json';
 
   if (typeof window !== 'undefined') {
-    let guestId = localStorage.getItem('yownews_guest_id');
+    let guestId = localStorage.getItem('yowyob_edu_guest_id');
     if (!guestId) {
       guestId = crypto.randomUUID();
-      localStorage.setItem('yownews_guest_id', guestId);
+      localStorage.setItem('yowyob_edu_guest_id', guestId);
     }
     finalHeaders['x-guest-id'] = guestId;
   }

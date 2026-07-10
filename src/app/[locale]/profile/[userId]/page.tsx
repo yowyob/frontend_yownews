@@ -126,9 +126,9 @@ export default function UserProfilePage() {
   return (
     <div style={{ maxWidth: '720px', margin: '0 auto' }}>
       {/* En-tête profil public */}
-      <div style={{ background: '#fff', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '14px', padding: '24px', marginBottom: '20px' }}>
+      <div style={{ background: '#fff', border: '1px solid var(--gray-100, #f3f4f6)', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
-          <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg,#1565C0,#7C3AED)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '26px', flexShrink: 0 }}>
+          <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '26px', flexShrink: 0 }}>
             {initials(profile.firstName, profile.lastName)}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -140,8 +140,8 @@ export default function UserProfilePage() {
                   onClick={handleFollowToggle}
                   disabled={followBusy}
                   style={{
-                    border: '1px solid var(--blue, #2563eb)', borderRadius: '20px', padding: '5px 16px', fontSize: '12px', fontWeight: 700,
-                    background: profile.isFollowing ? 'var(--blue, #2563eb)' : '#fff', color: profile.isFollowing ? '#fff' : 'var(--blue, #2563eb)',
+                    border: `1px solid ${profile.isFollowing ? 'var(--accent)' : 'var(--primary)'}`, borderRadius: '20px', padding: '5px 16px', fontSize: '12px', fontWeight: 700,
+                    background: profile.isFollowing ? 'var(--accent)' : '#fff', color: profile.isFollowing ? '#fff' : 'var(--primary)',
                     cursor: 'pointer', transition: 'all 0.2s ease',
                   }}
                 >
@@ -149,7 +149,7 @@ export default function UserProfilePage() {
                 </button>
               )}
             </div>
-            <div style={{ color: 'var(--gray-500)', fontSize: '14px', marginTop: '4px' }}>Membre de YowNews</div>
+            <div style={{ color: 'var(--gray-500)', fontSize: '14px', marginTop: '4px' }}>Membre de Yowyob Education</div>
             <div style={{ display: 'flex', gap: '20px', marginTop: '12px' }}>
               <span style={{ fontSize: '13px', color: 'var(--gray-600)' }}><b style={{ color: 'var(--primary)' }}>{profile.followersCount}</b> abonnés</span>
               <span style={{ fontSize: '13px', color: 'var(--gray-600)' }}><b style={{ color: 'var(--primary)' }}>{profile.followingCount}</b> abonnements</span>

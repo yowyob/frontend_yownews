@@ -83,7 +83,7 @@ export default function AdminPublisherOrgsPage() {
               Modération des Organisations Éditrices
             </h1>
             <p style={{ fontSize: '13px', color: '#64748B' }}>
-              Validez ou suspendez les demandes d'organisations éditrices souhaitant publier sur YowNews.
+              Validez ou suspendez les demandes d'organisations éditrices souhaitant publier sur Yowyob Education.
             </p>
           </div>
           <div>

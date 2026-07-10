@@ -6,7 +6,7 @@ import { getAdminSession } from '@/server/ksm/admin-session';
 import * as ratingsApi from '@/server/ksm/modules/ratings';
 import type { EntityType } from '@/server/ksm/modules/ratings';
 
-const VALID_TYPES: EntityType[] = ['BLOG', 'PODCAST', 'COMMENT', 'FORUM', 'DRIVER', 'AUTHOR', 'APPLICATION', 'ORGANISATION'];
+const VALID_TYPES: EntityType[] = ['BLOG', 'PODCAST', 'COURSE', 'COMMENT', 'FORUM', 'DRIVER', 'AUTHOR', 'APPLICATION', 'ORGANISATION'];
 
 // POST /api/ratings/like-or-dislike — { entityId, entityType, isLike }
 export async function POST(request: NextRequest) {

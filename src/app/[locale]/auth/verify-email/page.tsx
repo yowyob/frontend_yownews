@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch, BffApiError } from '@/lib/api-client';
-import { AuthLeftPanel } from '@/components/auth/AuthLeftPanel';
+import { AuthLayout } from '@/components/auth/AuthLayout';
 
 type Status = 'verifying' | 'success' | 'error';
 
@@ -31,13 +31,10 @@ export default function VerifyEmailPage() {
   }, [token]);
 
   return (
-    <div className="grid" style={{ gridTemplateColumns: '55% 45%', minHeight: '100vh' }}>
-      <AuthLeftPanel
-        kicker="Rejoins le mouvement"
-        headline={<>Vérification de ton email</>}
-        sub="Encore un instant, on confirme ton adresse."
-      />
-      <main className="bg-white flex items-center justify-center px-6 py-10 md:px-14" role="main">
+    <AuthLayout
+      headline={<>Vérification de ton email</>}
+      sub="Encore un instant, on confirme ton adresse."
+    >
         <div className="w-full max-w-[420px] text-center">
           {status === 'verifying' && (
             <>
@@ -53,8 +50,7 @@ export default function VerifyEmailPage() {
               </p>
               <Link
                 href="/auth/login"
-                className="inline-block px-5 py-3 rounded-[10px] font-semibold text-sm text-white transition-colors"
-                style={{ background: 'linear-gradient(135deg,#1565C0,#FF6B35)' }}
+                className="inline-block px-5 py-3 rounded-[10px] font-semibold text-sm text-white bg-[#FF6B35] hover:bg-[#E55A2B] transition-colors"
               >
                 Se connecter
               </Link>
@@ -66,15 +62,13 @@ export default function VerifyEmailPage() {
               <p className="text-sm text-[#64748B] mb-6">{error}</p>
               <Link
                 href="/auth/sign-up"
-                className="inline-block px-5 py-3 rounded-[10px] font-semibold text-sm text-white transition-colors"
-                style={{ background: 'linear-gradient(135deg,#1565C0,#FF6B35)' }}
+                className="inline-block px-5 py-3 rounded-[10px] font-semibold text-sm text-white bg-[#FF6B35] hover:bg-[#E55A2B] transition-colors"
               >
                 Retour à l&apos;inscription
               </Link>
             </>
           )}
         </div>
-      </main>
-    </div>
+    </AuthLayout>
   );
 }

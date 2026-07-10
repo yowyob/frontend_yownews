@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api-client';
 import { coverPathFor, feedSegmentFor } from './contentLinks';
+import CoverFallback from './CoverFallback';
 import type { FeedItem } from './ContentFeedCard';
 
 const WAVE_HEIGHTS = [30, 70, 45, 88, 55, 72, 38, 95, 62, 50, 80, 42, 90, 58, 68, 35, 78, 85, 46, 65];
@@ -88,10 +89,12 @@ export default function PodcastFeedCard({
     >
       {/* Cover + overlay */}
       <div style={{ position: 'relative', height: '180px', background: '#0d0d1a', overflow: 'hidden' }}>
-        {!coverFailed && (
+        {coverFailed ? (
+          <CoverFallback id={item.id} title={item.title} contentType={item.contentType} style={{ opacity: 0.7 }} />
+        ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={coverPathFor(item.contentType, item.id)}
+            src={item.coverUrl || coverPathFor(item.contentType, item.id)}
             alt=""
             onError={() => setCoverFailed(true)}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: 0.6 }}
@@ -134,10 +137,10 @@ export default function PodcastFeedCard({
             aria-label="Écouter"
             style={{
               flexShrink: 0, width: '38px', height: '38px',
-              background: 'linear-gradient(135deg, var(--blue, #2563eb), var(--accent, #f97316))',
+              background: 'var(--accent, #f97316)',
               borderRadius: '50%', border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 2px 8px rgba(37,99,235,.5)',
+              boxShadow: '0 2px 8px rgba(255,107,53,.4)',
             }}
           >
             <svg width="16" height="16" fill="white" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>

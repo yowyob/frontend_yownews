@@ -1,11 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useEditor, EditorContent, type Editor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
-import Placeholder from '@tiptap/extension-placeholder';
 import { apiFetch } from '@/lib/api-client';
 import ContentEditor from '@/components/content-editor/ContentEditor';
+import RichTextField, { useRichTextEditor } from '@/components/content-editor/RichTextField';
 import type { ContentTypeConfig, ExtraBodyResult, InitialContent } from '@/components/content-editor/types';
 import { clearDraft, isDraftMeaningful, loadDraft } from '@/components/content-editor/draftCache';
 import StatusBadge from '@/components/education/StatusBadge';
@@ -45,72 +42,16 @@ function formatDateTime(iso?: string | null) {
   return Number.isNaN(d.getTime()) ? '' : dateTimeFormatter.format(d);
 }
 
-// ── Barre d'outils TipTap ─────────────────────────────────────────────────────
-function Toolbar({ editor }: { editor: Editor | null }) {
-  if (!editor) return null;
-  const btn = (active: boolean): React.CSSProperties => ({
-    border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '6px', padding: '5px 9px',
-    fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: active ? 'var(--primary)' : '#fff',
-    color: active ? '#fff' : 'var(--gray-700, #374151)',
-  });
-  const setLink = () => {
-    const prev = editor.getAttributes('link').href as string | undefined;
-    const url = window.prompt('URL du lien', prev ?? 'https://');
-    if (url === null) return;
-    if (url === '') { editor.chain().focus().extendMarkRange('link').unsetLink().run(); return; }
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-  };
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px', borderBottom: '1px solid var(--gray-200, #e5e7eb)' }}>
-      <button type="button" style={btn(editor.isActive('bold'))} onClick={() => editor.chain().focus().toggleBold().run()}><b>B</b></button>
-      <button type="button" style={btn(editor.isActive('italic'))} onClick={() => editor.chain().focus().toggleItalic().run()}><i>I</i></button>
-      <button type="button" style={btn(editor.isActive('heading', { level: 2 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
-      <button type="button" style={btn(editor.isActive('heading', { level: 3 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>H3</button>
-      <button type="button" style={btn(editor.isActive('bulletList'))} onClick={() => editor.chain().focus().toggleBulletList().run()}>• Liste</button>
-      <button type="button" style={btn(editor.isActive('orderedList'))} onClick={() => editor.chain().focus().toggleOrderedList().run()}>1. Liste</button>
-      <button type="button" style={btn(editor.isActive('blockquote'))} onClick={() => editor.chain().focus().toggleBlockquote().run()}>❝</button>
-      <button type="button" style={btn(editor.isActive('link'))} onClick={setLink}>Lien</button>
-    </div>
-  );
-}
-
 // ── Onglet « Créer / Modifier » : éditeur générique + corps TipTap ─────────────
 function CreateBlogTab({ editing, onDone }: { editing: BlogDetail | null; onDone: () => void }) {
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Link.configure({ openOnClick: false }),
-      Placeholder.configure({ placeholder: 'Rédigez votre article…' }),
-    ],
-    content: editing?.content ?? '',
-    immediatelyRender: false,
-  });
+  const editor = useRichTextEditor({ content: editing?.content ?? '', placeholder: 'Rédigez votre article…' });
 
   const config: ContentTypeConfig = {
     noun: 'Blog',
     createPath: editing ? `/api/education/blogs/${editing.id}` : '/api/education/blogs',
     method: editing ? 'PUT' : 'POST',
     coverPath: (id) => `/api/education/blogs/${id}/cover`,
-    extraFields: (
-      <div>
-        <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', display: 'block' }}>Contenu</label>
-        <div style={{ border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '10px', overflow: 'hidden', background: '#fff' }}>
-          <Toolbar editor={editor} />
-          <div style={{ padding: '12px 14px', minHeight: '220px' }}>
-            <EditorContent editor={editor} />
-          </div>
-        </div>
-        <style>{`
-          .ProseMirror { outline: none; min-height: 200px; font-size: 15px; line-height: 1.6; }
-          .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9ca3af; float: left; height: 0; pointer-events: none; }
-          .ProseMirror h2 { font-size: 20px; font-weight: 700; margin: 14px 0 8px; }
-          .ProseMirror h3 { font-size: 17px; font-weight: 700; margin: 12px 0 6px; }
-          .ProseMirror ul, .ProseMirror ol { padding-left: 22px; }
-          .ProseMirror blockquote { border-left: 3px solid #e5e7eb; padding-left: 12px; color: #6b7280; }
-          .ProseMirror a { color: #2563eb; text-decoration: underline; }
-        `}</style>
-      </div>
-    ),
+    extraFields: <RichTextField editor={editor} label="Contenu" />,
     buildExtraBody: (): ExtraBodyResult => {
       const text = editor?.getText() ?? '';
       if (!text.trim()) return { ok: false, error: 'Le contenu est requis.' };
@@ -152,7 +93,7 @@ function CreateBlogTab({ editing, onDone }: { editing: BlogDetail | null; onDone
   return (
     <div>
       {editing && (
-        <div style={{ marginBottom: '14px', fontSize: '13px', color: 'var(--gray-500, #6b7280)' }}>
+        <div style={{ maxWidth: '760px', margin: '0 auto 14px', fontSize: '13px', color: 'var(--gray-500, #6b7280)' }}>
           Modification de « {editing.title} » — <button type="button" onClick={onDone} style={{ border: 'none', background: 'none', color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}>annuler</button>
         </div>
       )}
@@ -236,10 +177,11 @@ function MyBlogs({ onEdit }: { onEdit: (blog: BlogDetail) => void }) {
 
   const tabBtn = (val: 'DRAFT' | 'SUBMITTED' | 'PUBLISHED', labelText: string) => (
     <button type="button" onClick={() => setFilter(val)} style={{
-      padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-      border: '1px solid var(--gray-200, #e5e7eb)',
-      background: filter === val ? 'var(--primary)' : '#fff',
+      padding: '8px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+      border: `1px solid ${filter === val ? 'var(--accent)' : 'var(--gray-200, #e5e7eb)'}`,
+      background: filter === val ? 'var(--accent)' : '#fff',
       color: filter === val ? '#fff' : 'var(--gray-700, #374151)',
+      transition: 'all .15s',
     }}>{labelText}</button>
   );
 
@@ -258,7 +200,7 @@ function MyBlogs({ onEdit }: { onEdit: (blog: BlogDetail) => void }) {
       )}
 
       {blogs && blogs.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '12px', overflow: 'visible' }}>
+        <div style={{ background: '#fff', border: '1px solid var(--gray-100, #f3f4f6)', borderRadius: '14px', overflow: 'visible', boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
             <thead>
               <tr style={{ background: 'var(--gray-50, #f9fafb)', textAlign: 'left' }}>
@@ -272,7 +214,12 @@ function MyBlogs({ onEdit }: { onEdit: (blog: BlogDetail) => void }) {
             </thead>
             <tbody>
               {blogs.map((b) => (
-                <tr key={b.id} style={{ borderTop: '1px solid var(--gray-100, #f3f4f6)' }}>
+                <tr
+                  key={b.id}
+                  style={{ borderTop: '1px solid var(--gray-100, #f3f4f6)', transition: 'background .12s' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--gray-50, #f9fafb)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
                   <td style={{ padding: '12px 16px', fontWeight: 600 }}>{b.title}</td>
                   <td style={{ padding: '12px 16px' }}><StatusBadge status={b.status} /></td>
                   <td style={{ padding: '12px 16px', color: 'var(--gray-500, #6b7280)' }}>{b.domain === 'NONE' ? '—' : b.domain}</td>

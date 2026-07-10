@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
-/* ── EduHub / YowNews Design Tokens (Tailwind theme) ── */
+/* ── EduHub / Yowyob Education Design Tokens (Tailwind theme) ── */
 @theme inline {
-  /* Colors */
-  --color-primary-dark:  #0F3460;
-  --color-primary:       #1565C0;
-  --color-primary-med:   #1976D2;
+  /* Colors — bleu aligné sur celui de la landing page (--b600 dans landingStyles.ts) */
+  --color-primary-dark:  #1F5FBF;
+  --color-primary:       #1F5FBF;
+  --color-primary-med:   #1F5FBF;
   --color-primary-light: #E3F2FD;
   --color-accent:        #FF6B35;
   --color-accent-soft:   #FFB347;
@@ -23,7 +23,7 @@
    EduHub Landing — design system (ported from EduHub Landing.html)
    ═══════════════════════════════════════════════════════════ */
 :root{
-  --primary:#0F3460;--blue:#1565C0;--blue-light:#EBF3FF;
+  --primary:#1F5FBF;--blue:#1F5FBF;--blue-light:#EBF3FF;
   --accent:#FF6B35;--accent-soft:#FFB347;--accent-pale:#FFF4EE;
   --cream:#FFF8F4;--white:#FFFFFF;--off:#FAFAF8;
   --gray-50:#F8FAFC;--gray-100:#F3F4F6;--gray-200:#E5E7EB;--gray-300:#CBD5E1;--gray-400:#9CA3AF;--gray-500:#6B7280;--gray-600:#4B5563;

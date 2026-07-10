@@ -21,7 +21,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'YowNews. Apprenez. Explorez. Grandissez.',
+  title: 'Yowyob Education. Apprenez. Explorez. Grandissez.',
   description: 'La plateforme éducative camerounaise qui réunit blogs, podcasts et cours.',
 };
 
