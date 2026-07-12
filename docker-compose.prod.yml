@@ -7,7 +7,7 @@ services:
     environment:
       NODE_ENV: "production"
       PORT: "3000"
-      KSM_BASE_URL: "https://kernel-core.yowyob.com"
+      KSM_BASE_URL: "https://kernel-core.yowyob.com/kernel-api"
       KSM_CLIENT_ID: "yownews-frontend"
       KSM_API_KEY: "1Us9hr52ejC8BDuCJnXsgouAiV2NWkBUeEexdOD4"
       SESSION_SECRET: "tRE1J3P5ef2IXIt0tMsuSlbs1N2lCmPZdmU4d31FfmJA8CM8"
