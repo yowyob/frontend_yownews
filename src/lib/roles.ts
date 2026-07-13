@@ -25,6 +25,19 @@ export function isEducationEditor(authorities?: string[]): boolean {
   return hasRole(authorities, EDITOR_ROLE);
 }
 
+// Rôles manager par module, attribués à l'owner d'une organisation connectée en mode
+// organisation (cf. provisionOwnerRoles) — ORGANIZATION-scoped comme EDITOR_ROLE ci-dessus.
+export const ORG_MANAGER_ROLES = [
+  'ROLE_EDUCATION_MANAGER',
+  'ROLE_NEWSLETTER_MANAGER',
+  'ROLE_FORUM_MANAGER',
+] as const;
+
+/** Vrai si l'utilisateur détient au moins un rôle manager d'organisation (owner). */
+export function isOrganizationManager(authorities?: string[]): boolean {
+  return ORG_MANAGER_ROLES.some((role) => hasRole(authorities, role));
+}
+
 /**
  * Libellé du badge de rôle affiché dans la sidebar, dérivé des autorités de la SESSION
  * (et non du variant du layout) : un admin reste « Administrateur » même sur /reader/*.

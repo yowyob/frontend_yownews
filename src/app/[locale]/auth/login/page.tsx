@@ -15,18 +15,45 @@ type LoginResult = {
   user?: { permissions?: string[]; roles: string[] };
 };
 
+type OrgSummary = { organizationId: string; code: string; displayName: string };
+
+type OrgLoginResult = {
+  requiresOrgSelection?: boolean;
+  requiresSubscription?: boolean;
+  pendingId?: string;
+  organizations?: OrgSummary[];
+  organization?: OrgSummary;
+  requiredServices?: readonly string[];
+};
+
+const SERVICE_LABELS: Record<string, string> = {
+  EDUCATION: 'Éducation (blogs, podcasts, cours)',
+  NEWSLETTER: 'Newsletter',
+  FORUM: 'Forum',
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const { refresh } = useSession();
 
+  const [accountType, setAccountType] = useState<'individual' | 'organization'>('individual');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
-  // Étape « Choisir votre organisation » (login multi-orgs)
+
+  // Étape « Choisir votre organisation » — login classique (multi-orgs sur le même compte).
   const [orgStep, setOrgStep] = useState<{ pendingId: string; organizations: NonNullable<LoginResult['organizations']> } | null>(null);
+
+  // Étapes du login "mode organisation" (identifiants d'un owner, org potentiellement externe).
+  const [orgModeStep, setOrgModeStep] = useState<{ pendingId: string; organizations: OrgSummary[] } | null>(null);
+  const [subscribeStep, setSubscribeStep] = useState<{
+    pendingId: string;
+    organization: OrgSummary;
+    requiredServices: readonly string[];
+  } | null>(null);
 
   function validate() {
     const errs: typeof fieldErrors = {};
@@ -50,6 +77,17 @@ export default function LoginPage() {
     setFieldErrors((p) => ({ ...p, password: validate().password }));
   }
 
+  async function finishLogin(res: LoginResult) {
+    await refresh();
+    const authorities = res.user?.permissions ?? res.user?.roles ?? [];
+    const destination = isPlatformAdmin(authorities)
+      ? '/admin/dashboard'
+      : isEducationEditor(authorities)
+        ? '/editor/dashboard'
+        : '/';
+    router.push(destination);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const errs = validate();
@@ -58,6 +96,14 @@ export default function LoginPage() {
     setGlobalError(null);
     setLoading(true);
     try {
+      if (accountType === 'organization') {
+        const res = await apiFetch<OrgLoginResult>('/api/auth/login/organization', {
+          method: 'POST',
+          body: { email: email.trim().toLowerCase(), password },
+        });
+        await handleOrgModeResult(res);
+        return;
+      }
       const res = await apiFetch<LoginResult>('/api/auth/login', {
         method: 'POST',
         body: { email: email.trim().toLowerCase(), password },
@@ -70,23 +116,14 @@ export default function LoginPage() {
     } catch (err) {
       if (err instanceof BffApiError && err.status === 401) {
         setGlobalError('Email ou mot de passe incorrect.');
+      } else if (err instanceof BffApiError && err.errorCode === 'NO_ORGANIZATION_ACCESS') {
+        setGlobalError("Ce compte n'est ni propriétaire ni employé d'aucune organisation.");
       } else {
         setGlobalError('Une erreur est survenue. Veuillez réessayer.');
       }
     } finally {
       setLoading(false);
     }
-  }
-
-  async function finishLogin(res: LoginResult) {
-    await refresh();
-    const authorities = res.user?.permissions ?? res.user?.roles ?? [];
-    const destination = isPlatformAdmin(authorities)
-      ? '/admin/dashboard'
-      : isEducationEditor(authorities)
-        ? '/editor/dashboard'
-        : '/';
-    router.push(destination);
   }
 
   async function handleSelectOrg(organizationId: string) {
@@ -112,10 +149,179 @@ export default function LoginPage() {
     }
   }
 
+  async function finishOrgMode() {
+    await refresh();
+    router.push('/');
+  }
+
+  async function handleOrgModeResult(res: OrgLoginResult) {
+    if (res.requiresOrgSelection && res.pendingId && res.organizations?.length) {
+      setOrgModeStep({ pendingId: res.pendingId, organizations: res.organizations });
+      setSubscribeStep(null);
+      return;
+    }
+    if (res.requiresSubscription && res.pendingId && res.organization) {
+      setSubscribeStep({
+        pendingId: res.pendingId,
+        organization: res.organization,
+        requiredServices: res.requiredServices ?? ['EDUCATION', 'NEWSLETTER', 'FORUM'],
+      });
+      setOrgModeStep(null);
+      return;
+    }
+    await finishOrgMode();
+  }
+
+  async function handleSelectOrgMode(organizationId: string) {
+    if (!orgModeStep || loading) return;
+    setGlobalError(null);
+    setLoading(true);
+    try {
+      const res = await apiFetch<OrgLoginResult>('/api/auth/login/organization/select', {
+        method: 'POST',
+        body: { pendingId: orgModeStep.pendingId, organizationId },
+      });
+      await handleOrgModeResult(res);
+    } catch (err) {
+      if (err instanceof BffApiError && err.status === 401) {
+        setOrgModeStep(null);
+        setGlobalError('La session de connexion a expiré. Veuillez vous reconnecter.');
+      } else {
+        setGlobalError('Une erreur est survenue. Veuillez réessayer.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSubscribe(serviceCode: string) {
+    if (!subscribeStep || loading) return;
+    setGlobalError(null);
+    setLoading(true);
+    try {
+      const res = await apiFetch<OrgLoginResult>('/api/auth/login/organization/subscribe', {
+        method: 'POST',
+        body: {
+          pendingId: subscribeStep.pendingId,
+          organizationId: subscribeStep.organization.organizationId,
+          serviceCode,
+        },
+      });
+      await handleOrgModeResult(res);
+    } catch (err) {
+      if (err instanceof BffApiError && err.status === 401) {
+        setSubscribeStep(null);
+        setGlobalError('La session de connexion a expiré. Veuillez vous reconnecter.');
+      } else {
+        setGlobalError('Une erreur est survenue. Veuillez réessayer.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const inputBase =
     'w-full px-4 py-3 rounded-[10px] text-[15px] outline-none transition-all duration-200 bg-white';
   const inputStyle = (hasError?: boolean) =>
     `${inputBase} ${hasError ? 'border-2 border-red-400 shadow-[0_0_0_4px_rgba(239,68,68,.08)]' : 'border-[1.5px] border-gray-200 focus:border-[#1F5FBF] focus:shadow-[0_0_0_4px_rgba(31,95,191,.08)]'}`;
+
+  // Étape « Choisir votre organisation » (mode organisation, plusieurs orgs possédées).
+  if (orgModeStep) {
+    return (
+      <AuthLayout
+        headline={<>Connexion <span style={{ color: '#FF6B35' }}>Organisation</span></>}
+        sub="Connectez une organisation à votre espace créateur."
+        showTestimonial={false}
+      >
+        <div className="w-full max-w-[400px]">
+          {globalError && (
+            <div className="mb-4 px-4 py-3 rounded-[10px] bg-red-50 border border-red-200 text-sm text-red-600">
+              {globalError}
+            </div>
+          )}
+          <h2 className="font-display text-[24px] font-extrabold text-[#0F172A] mb-2">
+            Choisir votre organisation
+          </h2>
+          <p className="text-[15px] text-[#64748B] mb-6">
+            Ce compte possède plusieurs organisations. Sélectionnez celle à connecter.
+          </p>
+          <div className="flex flex-col gap-3" role="list" aria-label="Vos organisations">
+            {orgModeStep.organizations.map((org) => (
+              <button
+                key={org.organizationId}
+                type="button"
+                disabled={loading}
+                onClick={() => handleSelectOrgMode(org.organizationId)}
+                className="flex items-center gap-3 w-full text-left px-4 py-3.5 rounded-[10px] border-[1.5px] border-gray-200 bg-white hover:border-[#1F5FBF] hover:shadow-[0_0_0_4px_rgba(31,95,191,.08)] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
+              >
+                <span className="w-10 h-10 rounded-[9px] flex items-center justify-center font-display font-bold text-sm text-white shrink-0 bg-[#1F5FBF]">
+                  {org.displayName.slice(0, 2).toUpperCase()}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[15px] font-semibold text-[#0F172A] truncate">{org.displayName}</span>
+                  <span className="block text-xs text-[#64748B] truncate">{org.code}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => { setOrgModeStep(null); setGlobalError(null); }}
+            className="mt-6 text-sm text-[#1F5FBF] font-medium hover:text-[#FF6B35] transition-colors"
+          >
+            Utiliser un autre compte
+          </button>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  // Étape souscription (mode organisation, aucun module actif).
+  if (subscribeStep) {
+    return (
+      <AuthLayout
+        headline={<>Connexion <span style={{ color: '#FF6B35' }}>Organisation</span></>}
+        sub="Connectez une organisation à votre espace créateur."
+        showTestimonial={false}
+      >
+        <div className="w-full max-w-[400px]">
+          {globalError && (
+            <div className="mb-4 px-4 py-3 rounded-[10px] bg-red-50 border border-red-200 text-sm text-red-600">
+              {globalError}
+            </div>
+          )}
+          <h2 className="font-display text-[24px] font-extrabold text-[#0F172A] mb-2">
+            Activer un module pour {subscribeStep.organization.displayName}
+          </h2>
+          <p className="text-[15px] text-[#64748B] mb-6">
+            Cette organisation n&apos;a encore souscrit à aucun module. Choisissez celui à activer.
+          </p>
+          <div className="flex flex-col gap-3">
+            {subscribeStep.requiredServices.map((code) => (
+              <button
+                key={code}
+                type="button"
+                disabled={loading}
+                onClick={() => handleSubscribe(code)}
+                className="text-left px-4 py-3.5 rounded-[10px] border-[1.5px] border-gray-200 bg-white hover:border-[#1F5FBF] hover:shadow-[0_0_0_4px_rgba(31,95,191,.08)] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
+              >
+                <span className="block text-[15px] font-semibold text-[#0F172A]">
+                  {SERVICE_LABELS[code] ?? code}
+                </span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => { setSubscribeStep(null); setGlobalError(null); }}
+            className="mt-6 text-sm text-[#1F5FBF] font-medium hover:text-[#FF6B35] transition-colors"
+          >
+            Retour
+          </button>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout
@@ -179,7 +385,7 @@ export default function LoginPage() {
           {/* Header */}
           <div className="mb-9">
             <h2 className="font-display text-[32px] font-extrabold text-[#0F172A] mb-2">
-              Bon retour ! 
+              Bon retour !
             </h2>
             <p className="text-[15px] text-[#64748B]">
               Pas encore de compte ?{' '}
@@ -232,6 +438,83 @@ export default function LoginPage() {
               {globalError}
             </div>
           )}
+
+          {/* Type de compte */}
+          <div className="mb-5">
+            <p className="font-display text-xs font-semibold text-[#0F172A] mb-2">Type de compte</p>
+            <div className="grid grid-cols-2 gap-2.5">
+              {[
+                {
+                  value: 'individual' as const,
+                  name: 'Freelance',
+                  desc: 'Usage personnel',
+                  icon: (
+                    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"/>
+                    </svg>
+                  ),
+                },
+                {
+                  value: 'organization' as const,
+                  name: 'Organisation',
+                  desc: 'Équipe / Entreprise',
+                  icon: (
+                    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                      <path d="M9 22V12h6v10"/>
+                    </svg>
+                  ),
+                },
+              ].map((opt) => {
+                const selected = accountType === opt.value;
+                return (
+                  <label
+                    key={opt.value}
+                    htmlFor={`acct-${opt.value}`}
+                    className="relative flex flex-col items-center gap-2 p-3.5 rounded-[12px] cursor-pointer transition-all duration-200 text-center"
+                    style={{
+                      border: selected ? '2px solid #FF6B35' : '2px solid #E2E8F0',
+                      background: selected ? '#FFF3EC' : '#fff',
+                      boxShadow: selected ? '0 0 0 3px rgba(255,107,53,.1)' : 'none',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      id={`acct-${opt.value}`}
+                      name="acctType"
+                      value={opt.value}
+                      checked={selected}
+                      onChange={() => { setAccountType(opt.value); setGlobalError(null); }}
+                      className="absolute opacity-0 w-0 h-0"
+                    />
+                    <div
+                      className="w-9 h-9 rounded-[10px] flex items-center justify-center transition-all"
+                      style={{
+                        background: selected ? 'rgba(255,107,53,.15)' : '#F1F5F9',
+                        color: selected ? '#FF6B35' : '#94A3B8',
+                      }}
+                    >
+                      {opt.icon}
+                    </div>
+                    <div>
+                      <div className="font-display text-[13px] font-bold text-[#0F172A]">{opt.name}</div>
+                      <div className="text-[11px] text-[#64748B]">{opt.desc}</div>
+                    </div>
+                    {selected && (
+                      <div
+                        className="absolute top-2 right-2 w-[18px] h-[18px] rounded-full flex items-center justify-center"
+                        style={{ background: '#FF6B35' }}
+                      >
+                        <svg width="10" height="10" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24">
+                          <path d="M20 6L9 17l-5-5"/>
+                        </svg>
+                      </div>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} noValidate aria-label="Formulaire de connexion">
             {/* Email */}
@@ -340,7 +623,7 @@ export default function LoginPage() {
           <p className="text-center mt-6 text-sm text-[#64748B]">
             Nouveau sur YowYob Education ?{' '}
             <Link href="/auth/sign-up" className="text-[#1F5FBF] font-semibold hover:text-[#FF6B35] transition-colors">
-              Créer un compte gratuit 
+              Créer un compte gratuit
             </Link>
           </p>
 

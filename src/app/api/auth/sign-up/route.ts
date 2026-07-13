@@ -2,11 +2,12 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { handleRoute, fail, ok } from '@/server/api-response';
 import * as authApi from '@/server/ksm/modules/auth';
-import { provisionReaderRoles } from '@/server/ksm/admin-session';
+import { provisionReaderRoles, provisionOwnerRole } from '@/server/ksm/admin-session';
 import { writeSession } from '@/server/session';
 import { logger } from '@/server/logger';
 import { HttpError } from '@/lib/types/api';
 import type { AppSession } from '@/lib/types/auth';
+import { serverEnv } from '@/env';
 
 export async function POST(request: NextRequest) {
   return handleRoute(async () => {
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
         return fail(404, 'ORG_NOT_FOUND', "L'organisation n'existe pas dans KSM. Inscription en tant que particulier requise.");
       }
     } else {
-      discovery = await authApi.discoverSignUpContexts('YOWYOB_EDU');
+      discovery = await authApi.discoverSignUpContexts(serverEnv.KSM_PLATFORM_ORG_CODE);
       if (!discovery || !discovery.contexts || !discovery.contexts.length) {
         return fail(404, 'ORG_NOT_FOUND', 'Yowyob Education organisation not found. Contact support.');
       }
@@ -188,6 +189,10 @@ export async function POST(request: NextRequest) {
       }
 
       await provisionReaderRoles(registered.id, email);
+      // Cas rare (pas de vérification email requise) : ici le userId est déjà connu,
+      // donc l'attribution OWNER peut se faire directement (cf. cas courant dans
+      // /api/auth/email-verification/confirm, qui couvre le flux normal).
+      await provisionOwnerRole(registered.id);
 
       const session =
         (await reloginSession(email, password)) ?? buildSessionFromSignUp(registered, ctx.tenantId);

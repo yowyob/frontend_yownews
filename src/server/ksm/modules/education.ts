@@ -904,3 +904,33 @@ export function getPublicProfile(session: AppSession, userId: string): Promise<U
 }
 
 
+
+// ── Contenu de l'organisation active ───────────────────────────────────────────
+// Réutilise l'endpoint natif KSM `GET /api/v1/education/org/content` (OrgContentController),
+// qui filtre par `organizationId` résolu depuis le contexte (X-Organization-Id) — aucune logique
+// de filtrage à dupliquer côté BFF. Un seul champ commun (organizationId) suffit à distinguer le
+// contenu de l'org de celui d'un simple auteur individuel (cf. AbstractEducationService.create).
+
+export type OrgContentType = 'blog' | 'course' | 'podcast';
+
+export type OrgContentItem = {
+  id: string;
+  title: string;
+  description?: string | null;
+  status?: string | null;
+  authorId?: string | null;
+  organizationId?: string | null;
+  tenantId?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  publishedAt?: string | null;
+};
+
+export function listOrgContent(session: AppSession, type: OrgContentType): Promise<OrgContentItem[]> {
+  if (serverEnv.MOCK_MODE) {
+    // Les fixtures MOCK_MODE ne portent pas d'organizationId (pas de notion d'org en démo) —
+    // vue vide plutôt qu'un filtrage inventé qui laisserait croire à un vrai rattachement.
+    return Promise.resolve([]);
+  }
+  return getRaw<OrgContentItem[]>(`/api/v1/education/org/content?type=${type}`, session);
+}

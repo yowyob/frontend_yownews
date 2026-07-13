@@ -93,6 +93,14 @@ function CreateContentTab({ kind, editing, onDone }: { kind: WorkspaceKind; edit
     ) : (
       <RichTextField editor={transcriptEditor} label="Transcription" />
     ),
+    richEditor: kind === 'podcasts' ? transcriptEditor : undefined,
+    previewExtra: kind === 'courses' ? (
+      <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--gray-700, #374151)' }}>
+        <span><strong>Formateur :</strong> {trainerName.trim() || '—'}</span>
+        <span><strong>Durée :</strong> {duration.trim() ? `${duration.trim()} min` : '—'}</span>
+        <span><strong>Niveau :</strong> {level === 'beginner' ? 'Débutant' : level === 'intermediate' ? 'Intermédiaire' : 'Avancé'}</span>
+      </div>
+    ) : undefined,
     buildExtraBody: (): ExtraBodyResult => {
       if (kind === 'courses') {
         if (!trainerName.trim()) return { ok: false, error: 'Le formateur est requis.' };
@@ -295,6 +303,7 @@ function MyContent({ kind, onEdit }: { kind: WorkspaceKind; onEdit: (item: Conte
           blog={preview}
           coverPath={`/api/education/${kind}/${preview.id}/cover`}
           audioPath={kind === 'podcasts' ? `/api/education/podcasts/${preview.id}/audio` : undefined}
+          typeLabel={kind === 'podcasts' ? 'Podcast' : 'Cours'}
           onClose={() => setPreview(null)}
         />
       )}

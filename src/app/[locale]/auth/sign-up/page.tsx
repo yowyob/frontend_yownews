@@ -52,8 +52,6 @@ export default function SignUpPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [countryCode, setCountryCode] = useState('+237');
   const [phone, setPhone] = useState('');
-  const [accountType, setAccountType] = useState<'individual' | 'organization'>('individual');
-  const [orgCode, setOrgCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [emailVerificationRequired, setEmailVerificationRequired] = useState<string | null>(null);
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -66,14 +64,12 @@ export default function SignUpPage() {
     setFieldErrors((p) => ({ ...p, [field]: undefined }));
   }
 
-  // Étape 1 : identité (nom/prénom/username en particulier, code en organisation).
+  // Étape 1 : identité (compte toujours créé comme particulier/freelance).
   function validateStep1() {
     const errs: typeof fieldErrors = {};
-    if (accountType === 'individual') {
-      if (!firstName.trim()) errs.firstName = 'Requis';
-      if (!lastName.trim()) errs.lastName = 'Requis';
-      if (!username.trim()) errs.username = 'Requis';
-    }
+    if (!firstName.trim()) errs.firstName = 'Requis';
+    if (!lastName.trim()) errs.lastName = 'Requis';
+    if (!username.trim()) errs.username = 'Requis';
     return errs;
   }
 
@@ -125,14 +121,13 @@ export default function SignUpPage() {
       }>('/api/auth/sign-up', {
         method: 'POST',
         body: {
-          firstName: accountType === 'individual' ? firstName.trim() : 'Représentant',
-          lastName: accountType === 'individual' ? lastName.trim() : 'Organisation',
-          username: accountType === 'individual' ? username.trim() : email.trim().toLowerCase().split('@')[0],
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          username: username.trim(),
           email: email.trim().toLowerCase(),
           password,
           phoneNumber,
-          accountType,
-          orgCode: accountType === 'organization' ? orgCode.trim() : undefined,
+          accountType: 'individual',
         },
       });
       if (res.emailVerificationRequired) {
@@ -140,15 +135,11 @@ export default function SignUpPage() {
         return;
       }
       await refresh();
-      router.push(res.accountMode === 'organization' ? '/auth/org-onboarding' : '/');
+      router.push('/');
     } catch (err) {
       if (err instanceof BffApiError) {
         if (err.status === 409) {
           setFieldErrors({ email: 'Cette adresse email est déjà utilisée.' });
-        } else if (err.status === 404) {
-          setGlobalError("L'organisation n'existe pas dans KSM. Inscription en tant que particulier requise.");
-          setAccountType('individual');
-          setStep(1);
         } else {
           setGlobalError(err.message || 'Une erreur est survenue. Veuillez réessayer.');
         }
@@ -262,157 +253,58 @@ export default function SignUpPage() {
                 </div>
               )}
 
-              {/* Type de compte */}
-              <div className="mb-5">
-                <p className="font-display text-xs font-semibold text-[#0F172A] mb-2">Type de compte</p>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {[
-                    {
-                      value: 'individual' as const,
-                      name: 'Particulier',
-                      desc: 'Usage personnel',
-                      icon: (
-                        <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"/>
-                        </svg>
-                      ),
-                    },
-                    {
-                      value: 'organization' as const,
-                      name: 'Organisation',
-                      desc: 'Équipe / Entreprise',
-                      icon: (
-                        <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-                          <path d="M9 22V12h6v10"/>
-                        </svg>
-                      ),
-                    },
-                  ].map((opt) => {
-                    const selected = accountType === opt.value;
-                    return (
-                      <label
-                        key={opt.value}
-                        htmlFor={`acct-${opt.value}`}
-                        className="relative flex flex-col items-center gap-2 p-3.5 rounded-[12px] cursor-pointer transition-all duration-200 text-center"
-                        style={{
-                          border: selected ? '2px solid #FF6B35' : '2px solid #E2E8F0',
-                          background: selected ? '#FFF3EC' : '#fff',
-                          boxShadow: selected ? '0 0 0 3px rgba(255,107,53,.1)' : 'none',
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          id={`acct-${opt.value}`}
-                          name="acctType"
-                          value={opt.value}
-                          checked={selected}
-                          onChange={() => setAccountType(opt.value)}
-                          className="absolute opacity-0 w-0 h-0"
-                        />
-                        <div
-                          className="w-9 h-9 rounded-[10px] flex items-center justify-center transition-all"
-                          style={{
-                            background: selected ? 'rgba(255,107,53,.15)' : '#F1F5F9',
-                            color: selected ? '#FF6B35' : '#94A3B8',
-                          }}
-                        >
-                          {opt.icon}
-                        </div>
-                        <div>
-                          <div className="font-display text-[13px] font-bold text-[#0F172A]">{opt.name}</div>
-                          <div className="text-[11px] text-[#64748B]">{opt.desc}</div>
-                        </div>
-                        {selected && (
-                          <div
-                            className="absolute top-2 right-2 w-[18px] h-[18px] rounded-full flex items-center justify-center"
-                            style={{ background: '#FF6B35' }}
-                          >
-                            <svg width="10" height="10" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24">
-                              <path d="M20 6L9 17l-5-5"/>
-                            </svg>
-                          </div>
-                        )}
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {accountType === 'individual' ? (
-                <>
-                  {/* Name row */}
-                  <div className="grid grid-cols-2 gap-3 mb-3.5">
-                    {[
-                      { id: 'firstName', label: 'Prénom', value: firstName, setter: setFirstName, placeholder: 'Kwame', autocomplete: 'given-name' },
-                      { id: 'lastName', label: 'Nom', value: lastName, setter: setLastName, placeholder: 'Asante', autocomplete: 'family-name' },
-                    ].map(({ id, label, value, setter, placeholder, autocomplete }) => (
-                      <div key={id}>
-                        <label htmlFor={id} className="block font-display text-xs font-semibold text-[#0F172A] mb-1.5">{label}</label>
-                        <input
-                          id={id}
-                          type="text"
-                          value={value}
-                          onChange={(e) => { setter(e.target.value); clearErr(id as 'firstName' | 'lastName'); }}
-                          onBlur={() => handleBlur(id as 'firstName' | 'lastName', value.trim().length > 0)}
-                          placeholder={placeholder}
-                          autoComplete={autocomplete}
-                          required
-                          className={inputCls(!!fieldErrors[id as 'firstName' | 'lastName'], !fieldErrors[id as 'firstName' | 'lastName'] && value.trim().length > 0)}
-                          style={{ color: '#0F172A' }}
-                        />
-                        {fieldErrors[id as 'firstName' | 'lastName'] && (
-                          <p className="mt-1 text-[11px] text-red-500 flex items-center gap-1">
-                            <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                            {fieldErrors[id as 'firstName' | 'lastName']}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Username */}
-                  <div className="mb-6">
-                    <label htmlFor="username" className="block font-display text-xs font-semibold text-[#0F172A] mb-1.5">Nom d&apos;utilisateur</label>
+              {/* Name row */}
+              <div className="grid grid-cols-2 gap-3 mb-3.5">
+                {[
+                  { id: 'firstName', label: 'Prénom', value: firstName, setter: setFirstName, placeholder: 'Kwame', autocomplete: 'given-name' },
+                  { id: 'lastName', label: 'Nom', value: lastName, setter: setLastName, placeholder: 'Asante', autocomplete: 'family-name' },
+                ].map(({ id, label, value, setter, placeholder, autocomplete }) => (
+                  <div key={id}>
+                    <label htmlFor={id} className="block font-display text-xs font-semibold text-[#0F172A] mb-1.5">{label}</label>
                     <input
-                      id="username"
+                      id={id}
                       type="text"
-                      value={username}
-                      onChange={(e) => { setUsername(e.target.value); clearErr('username'); }}
-                      onBlur={() => handleBlur('username', username.trim().length > 0)}
-                      placeholder="kwame_asante"
-                      autoComplete="username"
+                      value={value}
+                      onChange={(e) => { setter(e.target.value); clearErr(id as 'firstName' | 'lastName'); }}
+                      onBlur={() => handleBlur(id as 'firstName' | 'lastName', value.trim().length > 0)}
+                      placeholder={placeholder}
+                      autoComplete={autocomplete}
                       required
-                      className={inputCls(!!fieldErrors.username, !fieldErrors.username && username.trim().length > 0)}
+                      className={inputCls(!!fieldErrors[id as 'firstName' | 'lastName'], !fieldErrors[id as 'firstName' | 'lastName'] && value.trim().length > 0)}
                       style={{ color: '#0F172A' }}
                     />
-                    {fieldErrors.username && (
+                    {fieldErrors[id as 'firstName' | 'lastName'] && (
                       <p className="mt-1 text-[11px] text-red-500 flex items-center gap-1">
                         <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                        {fieldErrors.username}
+                        {fieldErrors[id as 'firstName' | 'lastName']}
                       </p>
                     )}
                   </div>
-                </>
-              ) : (
-                <div className="mb-6">
-                  <label htmlFor="orgCode" className="block font-display text-xs font-semibold text-[#0F172A] mb-1.5">
-                    Code de l&apos;organisation
-                  </label>
-                  <input
-                    id="orgCode"
-                    type="text"
-                    value={orgCode}
-                    onChange={(e) => setOrgCode(e.target.value)}
-                    placeholder="EXEMPLE_ORG"
-                    className={inputCls()}
-                    style={{ color: '#0F172A' }}
-                  />
-                  <p className="mt-1.5 text-[11px] text-gray-400 leading-relaxed">
-                    Si cette organisation est déjà créée dans KSM, entrez son code pour vous y rattacher. Sinon, laissez vide pour créer un compte classique.
+                ))}
+              </div>
+
+              {/* Username */}
+              <div className="mb-6">
+                <label htmlFor="username" className="block font-display text-xs font-semibold text-[#0F172A] mb-1.5">Nom d&apos;utilisateur</label>
+                <input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => { setUsername(e.target.value); clearErr('username'); }}
+                  onBlur={() => handleBlur('username', username.trim().length > 0)}
+                  placeholder="kwame_asante"
+                  autoComplete="username"
+                  required
+                  className={inputCls(!!fieldErrors.username, !fieldErrors.username && username.trim().length > 0)}
+                  style={{ color: '#0F172A' }}
+                />
+                {fieldErrors.username && (
+                  <p className="mt-1 text-[11px] text-red-500 flex items-center gap-1">
+                    <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    {fieldErrors.username}
                   </p>
-                </div>
-              )}
+                )}
+              </div>
 
               <AuthButton type="button" onClick={handleNext}>
                 Continuer
@@ -518,30 +410,28 @@ export default function SignUpPage() {
               </div>
 
               {/* Phone (optional) */}
-              {accountType === 'individual' && (
-                <div className="mb-6">
-                  <label htmlFor="phone" className="block font-display text-xs font-semibold text-[#0F172A] mb-1.5">
-                    Téléphone <span className="text-gray-400 font-normal text-[11px] ml-1">(optionnel)</span>
-                  </label>
-                  <div className="flex">
-                    <CountryCodeSelect value={countryCode} onChange={setCountryCode} />
-                    <input
-                      id="phone"
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="07 00 00 00 00"
-                      autoComplete="tel-national"
-                      aria-label="Numéro de téléphone"
-                      className="flex-1 px-3.5 py-[11px] rounded-r-[10px] border-[1.5px] border-l-0 border-gray-200 bg-white text-sm text-[#0F172A] outline-none focus:border-[#1F5FBF] transition-all"
-                    />
-                  </div>
-                  <p className="mt-1 text-[11px] text-gray-400 flex items-center gap-1">
-                    <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-                    Pour recevoir des alertes importantes
-                  </p>
+              <div className="mb-6">
+                <label htmlFor="phone" className="block font-display text-xs font-semibold text-[#0F172A] mb-1.5">
+                  Téléphone <span className="text-gray-400 font-normal text-[11px] ml-1">(optionnel)</span>
+                </label>
+                <div className="flex">
+                  <CountryCodeSelect value={countryCode} onChange={setCountryCode} />
+                  <input
+                    id="phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="07 00 00 00 00"
+                    autoComplete="tel-national"
+                    aria-label="Numéro de téléphone"
+                    className="flex-1 px-3.5 py-[11px] rounded-r-[10px] border-[1.5px] border-l-0 border-gray-200 bg-white text-sm text-[#0F172A] outline-none focus:border-[#1F5FBF] transition-all"
+                  />
                 </div>
-              )}
+                <p className="mt-1 text-[11px] text-gray-400 flex items-center gap-1">
+                  <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                  Pour recevoir des alertes importantes
+                </p>
+              </div>
 
               <p className="text-center mb-4 text-[11px] text-gray-400 leading-relaxed">
                 En vous inscrivant, vous acceptez nos{' '}

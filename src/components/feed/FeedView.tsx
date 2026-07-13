@@ -6,7 +6,7 @@ import ContentFeedCard, { type FeedItem } from './ContentFeedCard';
 import PodcastFeedCard from './PodcastFeedCard';
 import FeaturedCarousel from './FeaturedCarousel';
 
-const FEATURED_COUNT = 5;
+const FEATURED_COUNT = 4;
 
 const FEED_PATH: Record<'BLOG' | 'PODCAST' | 'COURSE', string> = {
   BLOG: '/api/feed/blogs',

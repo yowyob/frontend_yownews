@@ -52,6 +52,7 @@ function CreateBlogTab({ editing, onDone }: { editing: BlogDetail | null; onDone
     method: editing ? 'PUT' : 'POST',
     coverPath: (id) => `/api/education/blogs/${id}/cover`,
     extraFields: <RichTextField editor={editor} label="Contenu" />,
+    richEditor: editor,
     buildExtraBody: (): ExtraBodyResult => {
       const text = editor?.getText() ?? '';
       if (!text.trim()) return { ok: false, error: 'Le contenu est requis.' };

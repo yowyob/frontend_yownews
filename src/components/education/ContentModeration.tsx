@@ -81,7 +81,10 @@ export default function ContentModeration({ kind }: { kind: ContentModerationKin
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2500); };
 
-  // Résolution auteur — un seul appel admin-only, pour tous les types de contenu.
+  // Résolution auteur — un seul appel admin-only (`/api/admin/users` → KSM
+  // `GET /api/administration/users`, tous les comptes du tenant), pour tous les types de contenu.
+  // Pas de repli via les rédacteurs newsletter ici : ce module est sans rapport avec les auteurs
+  // education (blogs/podcasts/cours) et ne peut résoudre correctement leur nom.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -94,8 +97,10 @@ export default function ContentModeration({ kind }: { kind: ContentModerationKin
           map.set(u.userId, name || u.email);
         }
         setAuthorNames(map);
-      } catch {
-        /* la colonne Auteur retombe sur l'id tronqué si indisponible */
+      } catch (e) {
+        // La colonne Auteur retombe sur l'id tronqué, mais on trace l'erreur réelle (403/500/etc.)
+        // en console — sans ce log, un échec de /api/admin/users passait totalement inaperçu.
+        console.error('[ContentModeration] échec de la résolution des auteurs via /api/admin/users', e);
       }
     })();
     return () => { cancelled = true; };
@@ -387,6 +392,7 @@ export default function ContentModeration({ kind }: { kind: ContentModerationKin
           onClose={() => setPreview(null)}
           coverPath={`/api/education/${kind}/${preview.id}/cover`}
           audioPath={kind === 'podcasts' ? `/api/education/podcasts/${preview.id}/audio` : undefined}
+          typeLabel={kind === 'podcasts' ? 'Podcast' : kind === 'courses' ? 'Cours' : 'Article'}
         />
       )}
     </div>

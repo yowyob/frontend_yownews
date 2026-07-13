@@ -51,8 +51,16 @@ export async function callKsm<T>(
 
     // Org context for the kernel gate: explicit override > validated session org
     // > platform org resolved from KSM by code (authoritative on KSM, no UUID here).
-    let orgId = options.organizationId ?? session.workspace?.organizationId ?? null;
-    if (!orgId) orgId = await resolvePlatformOrganizationId();
+    // `organizationId: null` (as opposed to simply omitted) is an explicit "no org
+    // context" — needed for endpoints like /api/organizations/my whose session may
+    // belong to a tenant/actor entirely unrelated to the platform org (ex. login
+    // mode organisation) : falling back to the platform org id there would send a
+    // mismatched X-Organization-Id and break the kernel gate.
+    let orgId = options.organizationId;
+    if (orgId === undefined) {
+      orgId = session.workspace?.organizationId ?? null;
+      if (!orgId) orgId = await resolvePlatformOrganizationId();
+    }
     if (orgId) headers['X-Organization-Id'] = orgId;
 
     const agId = options.agencyId ?? session.workspace?.agencyId;

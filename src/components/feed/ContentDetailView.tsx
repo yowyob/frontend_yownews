@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { coverPathFor } from './contentLinks';
 import CoverFallback from './CoverFallback';
+import ArticleLayout from './ArticleLayout';
+import AudioPlayer from './AudioPlayer';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useSessionUser } from '@/components/providers/session-provider';
 
@@ -416,26 +418,9 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
   const showFollow = !!(followCounts && sessionUser && sessionUser.id !== item.authorId);
   const showSubscribe = !!(sessionUser && authorRedacteur);
 
-  return (
-    <div style={{ maxWidth: '1180px', margin: '0 auto', background: '#fff' }}>
-      <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 18rem', columnGap: '64px' }}>
-        {/* Colonne principale : article */}
-        <article style={{ maxWidth: '68ch' }}>
-          <div style={{ position: 'relative', height: '200px', borderRadius: '8px', overflow: 'hidden', marginBottom: '40px', background: 'var(--gray-100, #f3f4f6)' }}>
-            {coverFailed ? (
-              <CoverFallback id={id} title={item.title} contentType={contentType} />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={coverPathFor(contentType, id)}
-                alt=""
-                onError={() => setCoverFailed(true)}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              />
-            )}
-          </div>
-
-          {allTags.length > 0 && (
+  const articleContent = (
+    <>
+      {allTags.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
               {allTags.map((t) => <Tag key={t}>#{t}</Tag>)}
             </div>
@@ -454,14 +439,14 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
           )}
 
           {contentType === 'PODCAST' && (
-            <div style={{ marginTop: '24px', padding: '18px 20px', borderRadius: '14px', background: 'var(--gray-50, #f8fafc)', border: '1px solid var(--gray-100, #f3f4f6)' }}>
+            <div style={{ marginTop: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                 <span style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="14" height="14" fill="none" stroke="#fff" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 1a4 4 0 00-4 4v6a4 4 0 008 0V5a4 4 0 00-4-4zM5 10v1a7 7 0 0014 0v-1M12 18v4M8 22h8"/></svg>
                 </span>
                 <span style={{ fontFamily: 'var(--font-d)', fontSize: '13px', fontWeight: 700, color: 'var(--dark, #111827)' }}>Écouter l&apos;épisode</span>
               </div>
-              <audio controls src={`/api/education/podcasts/${id}/audio`} className="podcast-audio" style={{ width: '100%' }} />
+              <AudioPlayer src={`/api/education/podcasts/${id}/audio`} />
             </div>
           )}
 
@@ -543,10 +528,11 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
               </button>
             </div>
           )}
-        </article>
+    </>
+  );
 
-        {/* Colonne latérale : méta / auteur / actions — sans carte, collante */}
-        <aside className="detail-aside" style={{ alignSelf: 'start' }}>
+  const asideContent = (
+    <>
           <div style={{ marginBottom: '32px' }}>
             <p className="eyebrow">Auteur</p>
             <Link
@@ -661,8 +647,18 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
               </div>
             </div>
           )}
-        </aside>
-      </div>
+    </>
+  );
+
+  return (
+    <div style={{ maxWidth: '1180px', margin: '0 auto', background: '#fff' }}>
+      <ArticleLayout
+        coverSrc={coverFailed ? null : coverPathFor(contentType, id)}
+        onCoverError={() => setCoverFailed(true)}
+        coverFallback={<CoverFallback id={id} title={item.title} contentType={contentType} />}
+        article={articleContent}
+        aside={asideContent}
+      />
 
       {/* Commentaires — pleine largeur, sans carte */}
       {supportsRatings && (
@@ -805,19 +801,8 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
       )}
 
       <style>{`
-        .detail-aside .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--gray-400, #9ca3af); margin: 0 0 10px; }
-        .content-detail-body p { margin: 0 0 20px; }
-        .content-detail-body h2 { font-size: 22px; font-weight: 700; margin: 28px 0 12px; }
-        .content-detail-body h3 { font-size: 18px; font-weight: 700; margin: 20px 0 10px; }
-        .content-detail-body ul, .content-detail-body ol { padding-left: 22px; margin: 0 0 20px; }
-        .content-detail-body blockquote { border-left: 3px solid var(--gray-200, #e5e7eb); padding-left: 16px; color: var(--gray-500, #6b7280); font-style: italic; }
-        .content-detail-body a { color: var(--accent); text-decoration: underline; }
-        .podcast-audio { accent-color: var(--accent); border-radius: 8px; }
-        .podcast-audio::-webkit-media-controls-panel { background: #fff; }
-        @media(min-width: 1024px) { .detail-aside { position: sticky; top: 32px; } }
         @media(max-width: 900px) {
           .detail-grid { grid-template-columns: 1fr!important; }
-          .detail-aside { position: static!important; margin-top: 40px; }
         }
       `}</style>
     </div>

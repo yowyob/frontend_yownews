@@ -2,6 +2,7 @@ import 'server-only';
 import { serverEnv } from '@/env';
 import { logger } from '@/server/logger';
 import type { AppSession } from '@/lib/types/auth';
+import { HttpError } from '@/lib/types/api';
 import { getMockSession } from '@/server/mock-session';
 import * as authApi from '@/server/ksm/modules/auth';
 import {
@@ -9,10 +10,14 @@ import {
   listTenantUsers,
   assignRole,
   revokeRole,
+  provisionDefaultRoles,
+  findRoleIdByCode,
   ROLE_CODE_READER,
   ROLE_CODE_NEWSLETTER_READER,
   ROLE_CODE_EDITOR,
   ROLE_CODE_NEWSLETTER_EDITOR,
+  OWNER_ROLE_CODES,
+  ROLE_CODE_OWNER,
 } from '@/server/ksm/modules/administration';
 
 // Session admin Yowyob Education obtenue côté serveur et réutilisée pour les opérations privilégiées
@@ -22,6 +27,7 @@ import {
 let cachedSession: AppSession | null = null;
 let cachedReaderRoleId: string | null = null;
 let cachedNewsletterReaderRoleId: string | null = null;
+let cachedOwnerRoleId: string | null = null;
 
 // marge de sécurité avant l'expiration du token (secondes)
 const REFRESH_MARGIN_SECONDS = 60;
@@ -48,6 +54,17 @@ function buildAdminSession(contextual: authApi.ContextualLoginResponse): AppSess
         : {}),
     },
   };
+}
+
+/**
+ * Invalide le cache de la session admin — à appeler quand un appel KSM utilisant cette session
+ * échoue en 401 malgré une expiration non atteinte (ex. redémarrage KSM avec
+ * IWM_JWT_AUTO_GENERATE_KEY_PAIR=true : la paire de clés de signature change, tous les tokens émis
+ * avant le redémarrage deviennent invalides bien qu'ils ne soient pas "expirés" du point de vue du
+ * cache, purement temporel). Le prochain `getAdminSession()` refait un login frais.
+ */
+export function invalidateAdminSession(): void {
+  cachedSession = null;
 }
 
 /**
@@ -81,6 +98,20 @@ export async function getAdminSession(): Promise<AppSession | null> {
     cachedSession = buildAdminSession(contextual);
     return cachedSession;
   } catch (cause) {
+    if (cause instanceof HttpError && cause.errorCode === 'MFA_REQUIRED_FOR_ADMIN') {
+      // Le compte de service (KSM_PLATFORM_ADMIN_*) doit rester un OWNER simple (autorité
+      // ROLE_OWNER) : KSM n'exige la MFA que pour les rôles ROLE_{TENANT,SYSTEM,GENERAL,IAM}_ADMIN
+      // (cf. AuthController.isPrivilegedAdminAuthority côté KSM). Si ce signal apparaît, le compte a
+      // été mal reconfiguré (rôle admin ajouté par erreur) — échec explicite plutôt que silencieux.
+      logger.error(
+        { cause },
+        'ksm.admin_session.mfa_required — le compte de service porte un rôle admin privilégié ' +
+          '(ROLE_TENANT_ADMIN/SYSTEM_ADMIN/GENERAL_ADMIN/IAM_ADMIN) au lieu de OWNER seul ; ' +
+          'retirer ce rôle ou provisionner un compte OWNER dédié sans rôle *_ADMIN.',
+      );
+      cachedSession = null;
+      return null;
+    }
     logger.error({ cause }, 'ksm.admin_session.login_failed');
     cachedSession = null;
     return null;
@@ -200,5 +231,65 @@ export async function promoteToEditorRoles(session: AppSession, userId: string):
   } else {
     await assignRole(session, userId, educationEditorRoleId);
     await assignRole(session, userId, newsletterEditorRoleId);
+  }
+}
+
+/**
+ * Attribue à un owner d'organisation le rôle le plus élevé de chaque module
+ * (EDUCATION_MANAGER, NEWSLETTER_MANAGER, FORUM_MANAGER — jamais
+ * SUPER_EDUCATION_SERVICES_MANAGER, réservé au staff plateforme), en utilisant
+ * l'identité admin partagée (pas le token de l'owner) — évite la contrainte de
+ * reconnexion après attribution de rôle. Best-effort par rôle : l'échec d'un rôle
+ * n'empêche pas l'attribution des autres. Ne fait rien si l'admin-session n'est pas
+ * configurée (dégradation silencieuse, ne bloque jamais la création d'organisation).
+ */
+export async function provisionOwnerRoles(organizationId: string, userId: string): Promise<void> {
+  const adminSession = await getAdminSession();
+  if (!adminSession) return;
+
+  try {
+    await provisionDefaultRoles(adminSession, organizationId);
+  } catch (cause) {
+    logger.error({ cause, organizationId }, 'ksm.admin_session.provision_default_roles_failed');
+  }
+
+  for (const code of OWNER_ROLE_CODES) {
+    try {
+      const roleId = await findRoleIdByCode(adminSession, organizationId, code);
+      if (!roleId) {
+        logger.warn({ code, organizationId }, 'ksm.admin_session.owner_role_not_found');
+        continue;
+      }
+      await assignRole(adminSession, userId, roleId, organizationId);
+    } catch (cause) {
+      logger.error({ cause, code, organizationId, userId }, 'ksm.admin_session.owner_role_assignment_failed');
+    }
+  }
+}
+
+/**
+ * Attribue le rôle tenant-scope `OWNER` à un utilisateur — préalable indispensable
+ * (`organizations:write`) avant qu'il puisse créer une organisation (cf. guide KSM
+ * "Créer et gérer une organisation via les endpoints kernel-core", étape 3). À appeler
+ * à l'inscription (pas au login) : le token utilisé plus tard pour créer l'organisation
+ * doit déjà porter cette autorité — KSM ne reflète un nouveau rôle qu'après un nouveau
+ * login, et sign-up/1ᵉʳ login sont deux requêtes distinctes (vérification email entre
+ * les deux), donc la contrainte est respectée naturellement. Best-effort/silencieux.
+ */
+export async function provisionOwnerRole(userId: string): Promise<void> {
+  const adminSession = await getAdminSession();
+  if (!adminSession) return;
+
+  try {
+    if (!cachedOwnerRoleId) {
+      cachedOwnerRoleId = await findRoleIdByCode(adminSession, null, ROLE_CODE_OWNER);
+    }
+    if (!cachedOwnerRoleId) {
+      logger.warn({}, 'ksm.admin_session.owner_role_not_found');
+      return;
+    }
+    await assignRole(adminSession, userId, cachedOwnerRoleId, null, 'TENANT');
+  } catch (cause) {
+    logger.error({ cause, userId }, 'ksm.admin_session.owner_role_assignment_failed');
   }
 }

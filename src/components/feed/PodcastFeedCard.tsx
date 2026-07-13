@@ -78,30 +78,30 @@ export default function PodcastFeedCard({
 
   return (
     <Link href={href} style={{
-      display: 'block', background: '#1a1a2e',
-      border: '1px solid rgba(255,255,255,.08)', borderRadius: '16px',
-      overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,.25)',
+      display: 'block', background: '#fff',
+      border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '14px',
+      overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,.06)',
       textDecoration: 'none', color: 'inherit',
       transition: 'box-shadow .15s, transform .15s',
     }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 28px rgba(0,0,0,.4)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,.25)'; (e.currentTarget as HTMLElement).style.transform = 'none'; }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(0,0,0,.1)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 3px rgba(0,0,0,.06)'; (e.currentTarget as HTMLElement).style.transform = 'none'; }}
     >
       {/* Cover + overlay */}
-      <div style={{ position: 'relative', height: '180px', background: '#0d0d1a', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', height: '200px', background: 'var(--gray-100, #f3f4f6)', overflow: 'hidden' }}>
         {coverFailed ? (
-          <CoverFallback id={item.id} title={item.title} contentType={item.contentType} style={{ opacity: 0.7 }} />
+          <CoverFallback id={item.id} title={item.title} contentType={item.contentType} />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={item.coverUrl || coverPathFor(item.contentType, item.id)}
             alt=""
             onError={() => setCoverFailed(true)}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: 0.6 }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         )}
-        {/* Dark gradient overlay */}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,10,26,.9) 0%, transparent 60%)' }} />
+        {/* Gradient overlay bas — assure la lisibilité des badges/waveform */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,.55) 0%, transparent 55%)' }} />
 
         {/* Domain badge */}
         {item.domain && item.domain !== 'NONE' && (
@@ -119,7 +119,7 @@ export default function PodcastFeedCard({
         {item.listenCount != null && item.listenCount > 0 && (
           <span style={{
             position: 'absolute', top: '12px', right: '12px',
-            background: 'rgba(0,0,0,.55)', color: 'rgba(255,255,255,.85)',
+            background: 'rgba(0,0,0,.45)', color: '#fff',
             fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px',
             display: 'flex', alignItems: 'center', gap: '4px',
           }}>
@@ -151,7 +151,7 @@ export default function PodcastFeedCard({
             {WAVE_HEIGHTS.map((h, i) => (
               <span key={i} style={{
                 flex: 1, height: `${h}%`,
-                background: i < 8 ? 'rgba(37,99,235,.9)' : 'rgba(255,255,255,.3)',
+                background: i < 8 ? 'var(--accent, #f97316)' : 'rgba(255,255,255,.4)',
                 borderRadius: '2px', display: 'block',
               }} />
             ))}
@@ -160,32 +160,25 @@ export default function PodcastFeedCard({
       </div>
 
       {/* Body */}
-      <div style={{ padding: '14px 16px' }}>
-        <h2 style={{
-          fontFamily: 'var(--font-d)', fontSize: '14px', fontWeight: 700,
-          margin: '0 0 6px', lineHeight: 1.35, color: '#fff',
-          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-        }}>
+      <div style={{ padding: '16px 18px' }}>
+        <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '15px', fontWeight: 700, margin: '0 0 6px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {item.title}
         </h2>
         {item.description && (
-          <p style={{
-            fontSize: '12px', color: 'rgba(255,255,255,.5)', margin: '0 0 10px', lineHeight: 1.5,
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>
+          <p style={{ fontSize: '13px', color: 'var(--gray-500, #6b7280)', margin: '0 0 10px', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {item.description}
           </p>
         )}
 
         {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,.08)' }}>
-          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,.35)', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '10px', borderTop: '1px solid var(--gray-100, #f3f4f6)' }}>
+          <span style={{ fontSize: '12px', color: 'var(--gray-400, #9ca3af)', flex: 1 }}>
             {formatDate(item.publishedAt)}
           </span>
 
           {showActions && (
             <>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'rgba(255,255,255,.5)', fontSize: '12px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--gray-500, #6b7280)', fontSize: '12px' }}>
                 <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
                 {likeCount ?? 0}
               </span>
@@ -193,7 +186,7 @@ export default function PodcastFeedCard({
                 type="button"
                 onClick={toggleFavorite}
                 title={favorited ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: favorited ? 'var(--accent)' : 'rgba(255,255,255,.3)', display: 'flex', alignItems: 'center' }}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: favorited ? 'var(--accent)' : 'var(--gray-300, #d1d5db)', display: 'flex', alignItems: 'center' }}
               >
                 <svg width="17" height="17" viewBox="0 0 24 24" fill={favorited ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
                   <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z"/>

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { Editor } from '@tiptap/react';
 
 export type Taxonomy = { id: string; name: string };
 
@@ -57,4 +58,10 @@ export type ContentTypeConfig = {
   draftKey: string;
   // Données spécifiques au type à inclure dans le brouillon local (ex. contenu TipTap).
   getDraftExtra?: () => Record<string, unknown>;
+  // Éditeur TipTap du corps (article/transcription) — permet à l'aperçu live de suivre son
+  // contenu en direct. Absent pour les types sans corps riche (ex. cours).
+  richEditor?: Editor | null;
+  // Bloc spécifique affiché dans l'aperçu live à la place du corps (ex. formateur/durée/
+  // niveau pour un cours, qui n'a pas de corps riche).
+  previewExtra?: ReactNode;
 };

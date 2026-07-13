@@ -4,6 +4,8 @@ import { apiFetch, BffApiError } from '@/lib/api-client';
 import MultiSelect, { type Option } from './MultiSelect';
 import Select from './Select';
 import FreeChips from './FreeChips';
+import LivePreview from './LivePreview';
+import AudioPlayer from '@/components/feed/AudioPlayer';
 import type { ContentTypeConfig, InitialContent, Taxonomy } from './types';
 import { clearDraft, isDraftMeaningful, loadDraft, saveDraft } from './draftCache';
 
@@ -77,6 +79,23 @@ export default function ContentEditor(
   const [message, setMessage] = useState<{ kind: 'ok' | 'err' | 'warn'; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const audioFileRef = useRef<HTMLInputElement>(null);
+
+  // Suit le HTML du corps en direct pour l'aperçu — le corps riche (TipTap) vit hors de ce
+  // composant (fourni par le type concret via `config.richEditor`), donc on s'abonne à ses
+  // mises à jour plutôt que de le dupliquer en state ici.
+  const [liveBodyHtml, setLiveBodyHtml] = useState(() => config.richEditor?.getHTML() ?? '');
+  // Synchronisation avec l'éditeur TipTap externe (source de vérité hors React), pas un
+  // dérivé du state local — un effet est le bon outil ici malgré le lint.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const richEditor = config.richEditor;
+    if (!richEditor) return;
+    setLiveBodyHtml(richEditor.getHTML());
+    const onUpdate = () => setLiveBodyHtml(richEditor.getHTML());
+    richEditor.on('update', onUpdate);
+    return () => { richEditor.off('update', onUpdate); };
+  }, [config.richEditor]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     (async () => {
@@ -253,8 +272,16 @@ export default function ContentEditor(
     color: kind === 'ok' ? '#16A34A' : kind === 'warn' ? '#C2410C' : '#B91C1C',
   });
 
+  const previewTags = [
+    ...selectedCats.filter((v) => v !== SENTINEL),
+    ...(showFreeCats ? freeCategories : []),
+    ...selectedTags.filter((v) => v !== SENTINEL),
+    ...(showFreeTags ? freeTags : []),
+  ];
+
   return (
-    <div style={{ maxWidth: '760px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="content-editor-layout" style={{ display: 'flex', gap: '32px', alignItems: 'flex-start' }}>
+    <div style={{ maxWidth: '760px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {message && <div style={msgStyle(message.kind)}>{msgIcon(message.kind)}{message.text}</div>}
 
       {/* Titre — grand champ sans distraction, la rédaction commence ici */}
@@ -335,7 +362,9 @@ export default function ContentEditor(
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gray-300, #d1d5db)'; }}
             >
               {audioPreview ? (
-                <audio controls src={audioPreview} style={{ width: '100%' }} onClick={(e) => e.preventDefault()} />
+                <div style={{ width: '100%' }} onClick={(e) => e.preventDefault()}>
+                  <AudioPlayer src={audioPreview} style={{ background: '#fff' }} />
+                </div>
               ) : (
                 <>
                   <svg width="30" height="30" fill="none" stroke="var(--gray-400, #9ca3af)" strokeWidth="1.7" viewBox="0 0 24 24">
@@ -409,6 +438,26 @@ export default function ContentEditor(
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'none'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(255,107,53,.3)'; }}
         >{saving ? 'Enregistrement…' : (config.method === 'PUT' ? 'Enregistrer les modifications' : 'Créer le brouillon')}</button>
       </div>
+    </div>
+
+    <div className="content-editor-preview" style={{ width: '100%', maxWidth: '520px', position: 'sticky', top: '16px' }}>
+      <LivePreview
+        typeLabel={config.noun}
+        title={title}
+        description={description}
+        tags={previewTags}
+        coverSrc={coverPreview}
+        bodyHtml={config.richEditor ? liveBodyHtml : undefined}
+        extra={config.previewExtra}
+      />
+    </div>
+
+    <style>{`
+      @media(max-width: 1200px) {
+        .content-editor-layout { flex-direction: column; }
+        .content-editor-preview { position: static!important; max-width: 760px!important; margin: 0 auto; }
+      }
+    `}</style>
     </div>
   );
 }

@@ -70,5 +70,12 @@ export function buildSession(contextual: ContextualLoginResponse): AppSession {
           }
         : {}),
     },
+    // Sert au switch d'org en session (/api/org/switchable, /api/org/switch) — owned+member déjà
+    // fusionné côté KSM (UserOrganizationAccessDirectory.listUserOrganizations).
+    accessibleOrganizations: (s.organizations ?? []).map((o) => ({
+      organizationId: o.organizationId,
+      code: o.organizationCode ?? o.organizationId,
+      displayName: orgDisplayName(o),
+    })),
   };
 }

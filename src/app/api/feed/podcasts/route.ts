@@ -23,7 +23,9 @@ export async function GET(request: NextRequest) {
       const withLikes = await Promise.all(
         pool.map(async (item) => ({ item, likes: await ratingsApi.getTotalLikes(session, item.id).catch(() => 0) })),
       );
-      return withLikes.sort((a, b) => b.likes - a.likes).slice(0, limit).map((w) => w.item);
+      // Un contenu sans aucun like n'a pas sa place "à la une" — il reste visible dans le fil
+      // normal (cf. FeedView.tsx, qui exclut simplement les ids déjà mis en avant ici).
+      return withLikes.filter((w) => w.likes > 0).sort((a, b) => b.likes - a.likes).slice(0, limit).map((w) => w.item);
     }
 
     return educationApi.getPodcastFeed(session, limit);

@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
+import OrgSwitcher from './OrgSwitcher';
 
 function initials(name: string) {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
@@ -144,6 +145,11 @@ export default function AdminTopbar({ displayName, variant = 'admin', mockMode =
           );
         })}
       </nav>
+
+      {/* Organisation active — switch sans re-login (même token, X-Organization-Id change côté
+          BFF). Badge statique si une seule org accessible, invisible si aucune (ex. lecteur
+          freelance sans organisation). */}
+      <OrgSwitcher />
 
       {/* Sélecteur de rôle démo — MOCK_MODE uniquement : bascule la session factice entre les
           3 personas (admin/rédacteur/lecteur) pour prévisualiser chaque sidebar/espace. */}
