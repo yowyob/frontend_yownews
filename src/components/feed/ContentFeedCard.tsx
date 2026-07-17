@@ -97,14 +97,13 @@ export default function ContentFeedCard({
 
   return (
     <Link href={href} style={{
-      display: 'block', background: '#fff',
-      border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '14px',
-      overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,.06)',
+      display: 'block', background: 'transparent',
+      borderRadius: '14px', overflow: 'hidden',
       textDecoration: 'none', color: 'inherit',
-      transition: 'box-shadow .15s, transform .15s',
+      transition: 'opacity .15s',
     }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(0,0,0,.1)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 3px rgba(0,0,0,.06)'; (e.currentTarget as HTMLElement).style.transform = 'none'; }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '.85'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
     >
       {/* Image avec overlay + badges */}
       <div style={{ position: 'relative', height: '200px', background: 'var(--gray-100, #f3f4f6)', overflow: 'hidden' }}>

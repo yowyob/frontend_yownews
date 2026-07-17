@@ -8,6 +8,7 @@ import { clearDraft, isDraftMeaningful, loadDraft } from '@/components/content-e
 import StatusBadge from '@/components/education/StatusBadge';
 import RowMenu from '@/components/education/RowMenu';
 import BlogPreviewModal from '@/components/education/BlogPreviewModal';
+import ModerationLink from '@/components/education/ModerationLink';
 
 const DRAFT_KIND = 'blog';
 
@@ -300,6 +301,7 @@ export default function BlogWorkspace() {
       <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid var(--gray-200, #e5e7eb)', marginBottom: '24px' }}>
         <button type="button" style={tabStyle('create')} onClick={goToCreate}>{editing ? 'Modifier' : 'Créer'}</button>
         <button type="button" style={tabStyle('list')} onClick={() => setTab('list')}>Mes blogs</button>
+        <ModerationLink kind="blogs" />
       </div>
 
       {tab === 'create'

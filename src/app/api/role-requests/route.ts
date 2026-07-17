@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { fail, ok } from '@/server/api-response';
 import { authenticatedRoute } from '@/server/handlers';
 import { isEducationEditor } from '@/lib/roles';
-import { EDUCATION_DOMAINS } from '@/lib/education-domains';
+import { listDomains } from '@/server/ksm/modules/education';
 import { submitApplication } from '@/server/ksm/modules/editor-applications';
 
 // POST /api/role-requests — un Lecteur soumet sa candidature pour devenir Rédacteur.
@@ -24,7 +24,11 @@ export async function POST(request: NextRequest) {
     const proofUrl = String(body.proofUrl ?? '').trim();
     const motivation = String(body.motivation ?? '').trim();
 
-    if (!domains.length || !domains.every((d) => (EDUCATION_DOMAINS as readonly string[]).includes(d))) {
+    // Valide contre la même source réelle que le formulaire (/api/education/domains, l'enum Domain
+    // de KSM) — l'ancienne constante statique EDUCATION_DOMAINS était obsolète (ex. CUISINE,
+    // pourtant un domaine réel, en était absent) et rejetait des candidatures valides.
+    const validDomains = await listDomains(session);
+    if (!domains.length || !domains.every((d) => validDomains.includes(d))) {
       return fail(400, 'VALIDATION_ERROR', 'Sélectionnez au moins un domaine valide.');
     }
     if (!proofUrl) return fail(400, 'VALIDATION_ERROR', 'Le lien de preuve est requis.');

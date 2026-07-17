@@ -2,12 +2,16 @@
 import * as React from 'react';
 import { useSession } from '@/components/providers/session-provider';
 import { Link, useRouter } from '@/i18n/navigation';
-import { isMigratedRole, roleSlug } from '@/lib/roles';
+import { roleVariant } from '@/lib/roles';
 
+// Le préfixe de route reflète toujours le variant d'interface de la session (admin/editor/reader
+// — cf. roleVariant, déjà utilisé par la sidebar), jamais un slug dérivé de roles[0] : ce tableau
+// d'autorités KSM n'est pas ordonné de façon stable, donc en indexer le premier élément produisait
+// un préfixe arbitraire (voire une chaîne vide pour un rôle "nu" sans autorité élevée), menant vers
+// des routes inexistantes (404 forum, unités de cours inaccessibles).
 function useRolePrefix(): string {
   const { session } = useSession();
-  const slug = roleSlug(session?.user.roles, session?.user.permissions);
-  return isMigratedRole(slug) ? `/${slug}` : '';
+  return `/${roleVariant(session?.user.permissions ?? session?.user.roles)}`;
 }
 
 export function withRolePrefix(prefix: string, href: string): string {

@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '@/lib/api-client';
+import { AppLink, useAppRouter } from '@/components/ui/app-link';
 import RowMenu, { type MenuItem } from '@/components/education/RowMenu';
 
 type ForumStatus = 'PENDING' | 'VALIDATED' | 'REJECTED';
@@ -36,6 +37,71 @@ function StatusBadge({ status }: { status: ForumStatus }) {
       fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px',
       background: `${STATUS_COLOR[status]}18`, color: STATUS_COLOR[status],
     }}>{STATUS_LABEL[status]}</span>
+  );
+}
+
+// ── Panneau « Forums de la communauté » ──
+// Les forums validés sont accessibles à TOUS les utilisateurs du tenant : `/api/forum/groups` →
+// KSM `/groups/public` (status=VALIDATED, filtré tenant, sans filtre par créateur). Sans ce
+// panneau, l'admin et le rédacteur ne voyaient que leurs propres forums (`/groups/mine`).
+function CommunityForums() {
+  const [groups, setGroups] = useState<DiscussionGroup[] | null>(null);
+
+  useEffect(() => {
+    apiFetch<DiscussionGroup[]>('/api/forum/groups')
+      .then((data) => setGroups(Array.isArray(data) ? data : []))
+      .catch(() => setGroups([]));
+  }, []);
+
+  // Les plus récents en premier ; une date absente passe en fin de liste.
+  const sorted = [...(groups ?? [])].sort(
+    (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+  );
+
+  return (
+    <aside>
+      <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--gray-700)', marginBottom: '4px' }}>
+        Forums de la communauté
+      </h3>
+      <p style={{ fontSize: '12px', color: 'var(--gray-400)', margin: '0 0 12px' }}>
+        Tous les forums validés, les plus récents en premier.
+      </p>
+
+      {groups === null ? (
+        <p style={{ color: 'var(--gray-400)', fontSize: '13px' }}>Chargement…</p>
+      ) : sorted.length === 0 ? (
+        <p style={{ color: 'var(--gray-400)', fontSize: '13px' }}>Aucun forum validé pour le moment.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {sorted.map((g) => (
+            <AppLink
+              key={g.groupId}
+              href={`/forums/${g.groupId}`}
+              style={{
+                display: 'block', background: '#fff', border: '1px solid var(--gray-200)',
+                borderRadius: '10px', padding: '12px 14px', textDecoration: 'none',
+                color: 'inherit', transition: 'box-shadow .15s',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,.08)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+            >
+              <div style={{ fontWeight: 700, fontSize: '13.5px', marginBottom: '3px' }}>{g.name}</div>
+              {g.description && (
+                <div style={{ fontSize: '12.5px', color: 'var(--gray-500)', lineHeight: 1.45, marginBottom: '6px' }}>
+                  {g.description}
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--gray-400)', background: 'var(--gray-100)', padding: '2px 6px', borderRadius: '6px' }}>
+                  {TYPE_LABELS[g.type] ?? g.type}
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--gray-400)' }}>{formatDate(g.createdAt)}</span>
+              </div>
+            </AppLink>
+          ))}
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -102,6 +168,7 @@ function ForumForm({ editing, onDone }: { editing?: DiscussionGroup | null; onDo
 }
 
 export default function MyForumsWorkspace({ userId }: { userId: string }) {
+  const router = useAppRouter();
   const [groups, setGroups] = useState<DiscussionGroup[] | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<DiscussionGroup | null>(null);
@@ -143,7 +210,8 @@ export default function MyForumsWorkspace({ userId }: { userId: string }) {
   }
 
   return (
-    <div style={{ maxWidth: '720px' }}>
+    <div className="my-forums-grid">
+      <div style={{ minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
         <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '20px', fontWeight: 800, margin: 0 }}>Mes forums</h2>
         <button type="button" onClick={() => setShowForm(true)} style={{
@@ -183,7 +251,7 @@ export default function MyForumsWorkspace({ userId }: { userId: string }) {
               {filteredMyGroups.map((g) => {
                 const clickable = g.status === 'VALIDATED';
                 const menuItems: MenuItem[] = [];
-                if (clickable) menuItems.push({ label: 'Ouvrir', onClick: () => { window.location.href = `/reader/forums/${g.groupId}`; } });
+                if (clickable) menuItems.push({ label: 'Ouvrir', onClick: () => router.push(`/forums/${g.groupId}`) });
                 menuItems.push({ label: 'Modifier', onClick: () => setEditing(g) });
 
                 return (
@@ -210,6 +278,22 @@ export default function MyForumsWorkspace({ userId }: { userId: string }) {
           )}
         </>
       )}
+      </div>
+
+      <CommunityForums />
+
+      <style>{`
+        .my-forums-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 320px;
+          gap: 28px;
+          align-items: start;
+          max-width: 1100px;
+        }
+        @media (max-width: 900px) {
+          .my-forums-grid { grid-template-columns: minmax(0, 1fr); }
+        }
+      `}</style>
     </div>
   );
 }

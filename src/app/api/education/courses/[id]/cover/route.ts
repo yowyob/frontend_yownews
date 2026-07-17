@@ -2,12 +2,16 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { handleRoute, fail } from '@/server/api-response';
 import { readSession } from '@/server/session';
+import { getAdminSession } from '@/server/ksm/admin-session';
 import { isEducationEditor, isPlatformAdmin } from '@/lib/roles';
 import * as educationApi from '@/server/ksm/modules/education';
 
 // Streame l'image de couverture depuis KSM (GET /api/v1/education/courses/{id}/covercourse).
+// Repli sur la session service pour les visiteurs anonymes (landing publique) — même pattern que
+// /api/feed/* et /api/public/cover : le feed n'expose que du contenu PUBLISHED, donc la couverture
+// est publique par nature.
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await readSession();
+  const session = (await readSession()) ?? (await getAdminSession());
   if (!session) return new Response(null, { status: 401 });
 
   const { id } = await params;

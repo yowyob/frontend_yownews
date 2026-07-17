@@ -57,7 +57,7 @@ function initials(name: string) {
   return name.split(' ').filter(Boolean).map((w) => w[0]).join('').toUpperCase().slice(0, 2) || '?';
 }
 
-export default function ContentDetailView({ contentType, id }: { contentType: DetailContentType; id: string }) {
+export default function ContentDetailView({ contentType, id, bleed = true }: { contentType: DetailContentType; id: string; bleed?: boolean }) {
   const router = useRouter();
   const [item, setItem] = useState<ContentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -545,7 +545,7 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
               </div>
               <div style={{ minWidth: 0 }}>
                 <p style={{ fontWeight: 600, fontSize: '14px', margin: 0, color: 'var(--dark, #111827)' }} className="hover:underline">{authorLabel}</p>
-                <p style={{ fontSize: '12px', color: 'var(--gray-500, #6b7280)', margin: 0 }}>Auteur</p>
+                {/*<p style={{ fontSize: '12px', color: 'var(--gray-500, #6b7280)', margin: 0 }}>Auteur</p>*/}
               </div>
             </Link>
           </div>
@@ -651,7 +651,13 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
   );
 
   return (
-    <div style={{ maxWidth: '1180px', margin: '0 auto', background: '#fff' }}>
+    // Surface de lecture blanche pleine largeur : par défaut (`bleed`), on annule le padding du
+    // <main> parent (28px 32px, identique reader/editor/admin) via des marges négatives pour que le
+    // blanc s'étende bord à bord — sinon le contenu apparaît comme une feuille blanche posée sur le
+    // fond gris de la page (l'effet « cadre » signalé). Les pages publiques passent `bleed={false}`
+    // (leur <main> gère déjà la pleine largeur avec Header/Footer).
+    <div style={bleed ? { background: '#fff', margin: '-28px -32px', padding: '28px 32px', minHeight: 'calc(100vh - 64px)' } : undefined}>
+    <div style={{ maxWidth: '1180px', margin: '0 auto' }}>
       <ArticleLayout
         coverSrc={coverFailed ? null : coverPathFor(contentType, id)}
         onCoverError={() => setCoverFailed(true)}
@@ -805,6 +811,7 @@ export default function ContentDetailView({ contentType, id }: { contentType: De
           .detail-grid { grid-template-columns: 1fr!important; }
         }
       `}</style>
+    </div>
     </div>
   );
 }

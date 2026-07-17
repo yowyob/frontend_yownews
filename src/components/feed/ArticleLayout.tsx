@@ -30,18 +30,18 @@ export default function ArticleLayout({
   const columnGap = compact ? '28px' : '64px';
 
   return (
-    <div className="article-layout" style={{ maxWidth, margin: '0 auto', background: '#fff' }}>
+    <div className="article-layout" style={{ maxWidth, margin: '0 auto' }}>
       <div className="article-layout-grid" style={{ display: 'grid', gridTemplateColumns: `minmax(0,1fr) ${asideWidth}`, columnGap }}>
         <article style={{ maxWidth: compact ? 'none' : '65ch', minWidth: 0 }}>
           {(coverSrc || coverFallback) && (
-            <div style={{ position: 'relative', height: coverHeight, borderRadius: coverRadius, overflow: 'hidden', marginBottom: compact ? '20px' : '40px', background: 'var(--gray-100, #f3f4f6)' }}>
+            <div style={{ position: 'relative', height: coverHeight, maxHeight: coverHeight, borderRadius: coverRadius, overflow: 'hidden', marginBottom: compact ? '20px' : '40px', background: 'var(--gray-100, #f3f4f6)' }}>
               {coverSrc ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={coverSrc}
                   alt=""
                   onError={onCoverError}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
                 />
               ) : (
                 coverFallback

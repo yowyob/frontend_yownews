@@ -8,10 +8,12 @@ import { logger } from '@/server/logger';
 import type { OrgLoginOrganization } from '@/server/org-login-pending';
 
 /** Au moins un de ces services doit être souscrit par l'organisation pour qu'elle soit
- *  utilisable en mode organisation (cf. registre kernel.platform_external_service). Education/Forum
- *  ne sont plus des services gatés par abonnement (cf. PlatformServiceRouteResolver côté KSM) —
- *  seuls Newsletter (contenu) et HRM (gestion des employés) le restent. */
-export const ORG_MODE_REQUIRED_SERVICES = ['NEWSLETTER', 'HRM'] as const;
+ *  utilisable en mode organisation (cf. registre kernel.platform_external_service). Education et
+ *  Forum restent bien des services gatés par abonnement au même titre que Newsletter/HRM (cf.
+ *  PlatformServiceCode.EDUCATION/FORUM, subscribable=true, et OrganizationServiceEntitlementWebFilter
+ *  qui applique le gate génériquement à tout service résolu par PlatformServiceRouteResolver — un
+ *  commentaire précédent affirmait à tort qu'ils ne l'étaient plus). */
+export const ORG_MODE_REQUIRED_SERVICES = ['EDUCATION', 'NEWSLETTER', 'FORUM', 'HRM'] as const;
 
 export type ActivateOrgResult =
   | { subscribed: true; session: AppSession }

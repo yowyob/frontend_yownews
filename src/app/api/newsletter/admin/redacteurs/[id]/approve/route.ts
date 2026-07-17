@@ -4,6 +4,7 @@ import { readSession } from '@/server/session';
 import { isPlatformAdmin } from '@/lib/roles';
 import * as newsletterApi from '@/server/ksm/modules/newsletter';
 import * as adminApi from '@/server/ksm/modules/administration';
+import { resolvePlatformOrganizationId } from '@/server/ksm/platform-org';
 
 // POST /api/newsletter/admin/redacteurs/{id}/approve — approuve la demande PUIS assigne le rôle
 // KSM NEWSLETTER_EDITOR au compte (sans ça, l'approbation ne fait que changer un statut métier :
@@ -27,7 +28,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const applicant = users.find((u) => u.userId === approved.userId);
     const alreadyAssigned = applicant?.roles.some((r) => r.code === adminApi.ROLE_CODE_NEWSLETTER_EDITOR) ?? false;
     if (!alreadyAssigned) {
-      await adminApi.assignRole(session, approved.userId, newsletterEditorRoleId);
+      // organizationId explicite (plateforme) — la demande de rédacteur (table `redacteur`) n'a
+      // aucune dimension organisation, seulement tenant ; sans cet argument, callKsm retomberait
+      // sur l'org courante de la session admin appelante (potentiellement en contexte organisation
+      // au moment de l'approbation), scopant le rôle sur la mauvaise organisation.
+      const platformOrgId = await resolvePlatformOrganizationId();
+      await adminApi.assignRole(session, approved.userId, newsletterEditorRoleId, platformOrgId);
     }
 
     return approved;

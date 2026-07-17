@@ -55,6 +55,12 @@ async function readRaw<T>(res: Response): Promise<T> {
   return (text ? (JSON.parse(text) as T) : (null as T));
 }
 
+// Garde partagée pour les endpoints de listing : tolère un corps de réponse absent/malformé
+// (readRaw renvoie alors null) sans faire planter les appelants qui font .map/.filter dessus.
+function asArray<T>(x: unknown): T[] {
+  return Array.isArray(x) ? (x as T[]) : [];
+}
+
 async function getRaw<T>(path: string, session: AppSession): Promise<T> {
   const res = await callKsm<Response>(path, { method: 'GET', raw: true }, { session });
   return readRaw<T>(res);
@@ -274,8 +280,8 @@ export async function getBlog(session: AppSession, id: string): Promise<BlogDeta
   ]);
   return {
     ...blog,
-    categories: Array.isArray(categories) ? categories : [],
-    tags: Array.isArray(tags) ? tags : [],
+    categories: asArray<string>(categories),
+    tags: asArray<string>(tags),
   };
 }
 
@@ -552,8 +558,8 @@ export async function getContent(session: AppSession, kind: ContentKind, id: str
   ]);
   return {
     ...item,
-    categories: Array.isArray(categories) ? categories : [],
-    tags: Array.isArray(tags) ? tags : [],
+    categories: asArray<string>(categories),
+    tags: asArray<string>(tags),
   };
 }
 
@@ -794,9 +800,9 @@ export function toggleFavorite(session: AppSession, entityId: string, contentTyp
   return sendRaw<string>(`/api/v1/education/favorites/toggle?${params.toString()}`, 'POST', undefined, session);
 }
 
-export function listMyFavorites(session: AppSession) {
-  if (serverEnv.MOCK_MODE) return Promise.resolve(getMockFavoritesList(session.user.id));
-  return getRaw<FavoriteEntity[]>(`/api/v1/education/favorites/${session.user.id}`, session);
+export async function listMyFavorites(session: AppSession) {
+  if (serverEnv.MOCK_MODE) return getMockFavoritesList(session.user.id);
+  return asArray<FavoriteEntity>(await getRaw<unknown>(`/api/v1/education/favorites/${session.user.id}`, session));
 }
 
 // Favoris hydratés (titre/description/domaine/tags…) pour réutiliser le rendu carte du feed.

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import RowMenu from '@/components/education/RowMenu';
 
-type RedacteurStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+type RedacteurStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVOKED';
 type RedacteurRequest = { id: string; email: string; nom: string; prenom: string; status: RedacteurStatus; createdAt?: string | null };
 type Tab = 'attente' | 'validees';
 
@@ -14,6 +14,7 @@ const STATUS_LABEL: Record<RedacteurStatus, { label: string; bg: string; color: 
   PENDING: { label: 'En attente', bg: '#FEF9EC', color: '#B45309' },
   APPROVED: { label: 'Validé', bg: 'rgba(34,197,94,.1)', color: '#16A34A' },
   REJECTED: { label: 'Rejeté', bg: '#FEF2F2', color: '#DC2626' },
+  REVOKED: { label: 'Révoqué', bg: 'var(--gray-100)', color: 'var(--gray-500)' },
 };
 
 function RedacteurStatusBadge({ status }: { status: RedacteurStatus }) {
@@ -65,6 +66,17 @@ export default function RedacteurRequestsModeration() {
     } finally { setBusyId(null); }
   };
 
+  const revoke = async (id: string) => {
+    if (!window.confirm('Révoquer ce rédacteur ? Il perdra immédiatement le droit de publier.')) return;
+    setBusyId(id); setError(null);
+    try {
+      await apiFetch(`/api/newsletter/admin/redacteurs/${id}/revoke`, { method: 'POST' });
+      setItems((prev) => prev?.map((i) => (i.id === id ? { ...i, status: 'REVOKED' as const } : i)) ?? prev);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Échec de la révocation');
+    } finally { setBusyId(null); }
+  };
+
   const tabStyle = (val: Tab): React.CSSProperties => ({
     padding: '9px 16px', fontSize: '13.5px', fontWeight: 600, cursor: 'pointer', background: 'none', border: 'none',
     borderBottom: tab === val ? '2px solid var(--accent)' : '2px solid transparent',
@@ -104,6 +116,10 @@ export default function RedacteurRequestsModeration() {
                     <RowMenu disabled={busyId === r.id} items={[
                       { label: 'Approuver', onClick: () => approve(r.id) },
                       { label: 'Rejeter', onClick: () => reject(r.id), danger: true },
+                    ]} />
+                  ) : r.status === 'APPROVED' ? (
+                    <RowMenu disabled={busyId === r.id} items={[
+                      { label: 'Révoquer', onClick: () => revoke(r.id), danger: true },
                     ]} />
                   ) : (
                     <span style={{ color: 'var(--gray-300)', fontSize: 12.5 }}>—</span>

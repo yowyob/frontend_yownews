@@ -9,6 +9,7 @@ import { clearDraft, isDraftMeaningful, loadDraft } from '@/components/content-e
 import RowMenu from '@/components/education/RowMenu';
 import StatusBadge from '@/components/education/StatusBadge';
 import BlogPreviewModal, { type BlogPreviewData } from '@/components/education/BlogPreviewModal';
+import ModerationLink from '@/components/education/ModerationLink';
 import { useAppRouter } from '@/components/ui/app-link';
 
 export type WorkspaceKind = 'courses' | 'podcasts';
@@ -370,6 +371,7 @@ export default function ContentWorkspace({ kind }: { kind: WorkspaceKind }) {
       <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid var(--gray-200, #e5e7eb)', marginBottom: '24px' }}>
         <button type="button" style={tabStyle('create')} onClick={goToCreate}>{editing ? 'Modifier' : 'Créer'}</button>
         <button type="button" style={tabStyle('list')} onClick={() => setTab('list')}>{meta.listLabel}</button>
+        <ModerationLink kind={kind} />
       </div>
 
       {tab === 'create'

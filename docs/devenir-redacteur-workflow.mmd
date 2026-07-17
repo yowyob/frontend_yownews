@@ -33,16 +33,21 @@ sequenceDiagram
     DB-->>EDU: liste
     EDU-->>A: candidatures a traiter
 
-    Note over A,DB: 4a) Validation (assigne le role automatiquement)
+    Note over A,DB: 4a) Validation (enregistre l'autorisation, n'assigne PAS le role)
     A->>BFF: POST /api/admin/role-requests/{id}/approve
-    BFF->>ADM: GET /administration/roles -> id role Redacteur
-    BFF->>ADM: POST /administration/users/{userId}/roles (EDUCATION_EDITOR_PERMISSIONS, scope ORGANIZATION)
-    ADM->>DB: INSERT user_role_assignment
     BFF->>EDU: PATCH /editor-applications/{id}/status (APPROVED)
     EDU->>DB: findById -> UPDATE status=APPROVED, decided_at/by
     EDU-->>BFF: 200
     BFF-->>A: Valide
-    Note right of A: Le Lecteur devient Redacteur -> acces a /editor apres reconnexion
+    Note right of A: L'admin ne PEUT PAS assigner le role ici : EDUCATION_EDITOR_PERMISSIONS est de type<br/>ORGANIZATION, et l'assigner sur l'org freelance du candidat exige d'en etre membre (401 KSM).<br/>L'admin autorise, l'utilisateur materialise. Voir docs/service-role-provisioning.md
+
+    Note over L,DB: 4a-bis) Materialisation du role, a la reconnexion du Redacteur
+    L->>BFF: POST /api/auth/login
+    BFF->>EDU: GET /editor-applications/me -> status APPROVED => niveau "editor"
+    BFF->>ADM: POST /administration/users/{userId}/roles (EDUCATION_EDITOR_PERMISSIONS,<br/>scope ORGANIZATION = son org, via SON token : il en est OWNER)
+    ADM->>DB: INSERT user_role_assignment
+    BFF->>BFF: re-login interne (un token deja emis ne reflete jamais un role assigne apres coup)
+    BFF-->>L: Session redacteur -> atterrissage /editor
 
     Note over A,DB: 4b) Refus
     A->>BFF: POST /api/admin/role-requests/{id}/reject

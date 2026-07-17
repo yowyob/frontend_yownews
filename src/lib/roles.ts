@@ -60,14 +60,6 @@ export function roleBadgeLabel(authorities?: string[]): string {
   return labels[roleVariant(authorities)];
 }
 
-export function roleSlug(roles?: string[], _permissions?: string[]): string {
-  return roles?.[0]?.toLowerCase() ?? '';
-}
-
-export function isMigratedRole(slug: string): boolean {
-  return !!slug;
-}
-
 export const AppRoles = {
   SUPER_ADMIN: 'SUPER_ADMIN',
   ADMIN: 'ADMIN',

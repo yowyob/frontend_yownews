@@ -7,8 +7,39 @@ import {
   onboardBusinessActor,
   createOrganization,
   approveOrganization,
+  subscribeService,
 } from '@/server/ksm/modules/organizations';
 import { provisionOwnerRoles } from '@/server/ksm/admin-session';
+
+// Services souscrits par défaut pour une organisation freelance — HRM exclu (gestion RH
+// d'entreprise, hors du modèle freelance/individuel). Sans cet appel explicite, l'organisation
+// naît sans aucun service souscrit (provision-subscribable-services-on-create=false côté KSM,
+// changement de politique documenté — plus d'abonnement automatique) : le owner ne peut alors
+// créer aucun contenu Education/Newsletter/Forum (403 ORGANIZATION_SERVICE_NOT_SUBSCRIBED).
+const FREELANCE_DEFAULT_SERVICES = ['EDUCATION', 'NEWSLETTER', 'FORUM'] as const;
+
+/**
+ * Souscrit les services par défaut manquants pour une organisation (best-effort, idempotent —
+ * ne touche pas aux services déjà présents dans `currentServices`). Utilisé à la création d'une
+ * org freelance, mais aussi en auto-réparation à chaque login pour un compte qui a déjà une org
+ * (cf. login/route.ts) : sans ce second point d'appel, une org créée avant ce correctif — ou dont
+ * la souscription avait échoué silencieusement — restait bloquée à vie, la logique de création
+ * ne se redéclenchant jamais pour un compte qui a déjà au moins une organisation.
+ */
+export async function ensureOrgServicesSubscribed(
+  session: AppSession,
+  organizationId: string,
+  currentServices: readonly string[] = [],
+): Promise<void> {
+  const missing = FREELANCE_DEFAULT_SERVICES.filter((svc) => !currentServices.includes(svc));
+  for (const serviceCode of missing) {
+    try {
+      await subscribeService(session, organizationId, serviceCode);
+    } catch (subscribeCause) {
+      logger.error({ cause: subscribeCause, organizationId, serviceCode }, 'ksm.org.subscribe_service_failed');
+    }
+  }
+}
 
 function slugifyEmailLocalPart(email: string): string {
   const local = email.split('@')[0] ?? email;
@@ -89,6 +120,7 @@ export async function ensureFreelanceOrganization(
       // donc approuver sa propre organisation, avec le même token.
       await approveOrganization(session, org.id);
       await provisionOwnerRoles(org.id, session.user.id);
+      await ensureOrgServicesSubscribed(session, org.id);
       return;
     } catch (cause) {
       if (cause instanceof HttpError && cause.errorCode === 'ORGANIZATION_CODE_DUPLICATE') {

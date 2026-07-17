@@ -173,6 +173,14 @@ Deux trous comblés : le **Chantier 1** (rôle Lecteur auto) est **100 % BFF** ;
 module education (voir §8.2 — l'historique Redis est conservé en note).
 
 ### 8.1 Rôle Lecteur auto à l'inscription (Chantier 1)
+
+> ⚠️ **Partiellement périmé** (état conservé pour l'historique). L'attribution du rôle Lecteur
+> **par l'admin** ne suffit plus depuis le passage aux organisations freelance : scopée sur l'org
+> **plateforme**, elle n'apparaît pas dans le token d'un lecteur, émis dans le contexte de **son**
+> org freelance. C'est désormais l'utilisateur qui matérialise ses rôles de service, sur sa propre
+> org, à son login (`ensureServiceRolesSelf`). Source de vérité :
+> **`docs/service-role-provisioning.md`**.
+
 - Un nouvel inscrit n'avait **aucun rôle**. Désormais le BFF lui assigne `EDUCATION_READER_PERMISSIONS`
   juste après le sign-up, **en tant qu'admin YowNews** (l'admin a `administration:assignments:write` — C1),
   exactement comme la page `/admin/users` (`assignRole`, scope ORGANIZATION).
@@ -203,6 +211,10 @@ module education (voir §8.2 — l'historique Redis est conservé en note).
 - Routes BFF rebrandées vers KSM (mêmes chemins qu'avant) : `POST /api/role-requests`,
   `GET /api/role-requests/me` ; admin (`isPlatformAdmin`) : `GET /api/admin/role-requests`,
   `POST …/[id]/approve` (PATCH status APPROVED **+** `assignRole` Rédacteur), `POST …/[id]/reject`.
+  > ⚠️ **Périmé** : `approve` ne fait plus que `PATCH status APPROVED`. L'admin ne peut pas assigner
+  > le rôle Rédacteur sur l'org freelance du candidat (rôle de type ORGANIZATION → il faudrait en
+  > être membre → 401 KSM). Le rédacteur matérialise son rôle à sa reconnexion. Cf.
+  > `docs/service-role-provisioning.md` et `docs/devenir-redacteur-workflow.mmd`.
 - UI Lecteur : formulaire dans `src/app/[locale]/reader/profile/ProfileClient.tsx` (cases domaines +
   proofUrl + motivation) — bannière « Devenir Rédacteur » sur le profil (voir §9).
 - UI admin : `src/app/[locale]/admin/role-requests/page.tsx` (affiche domaines/preuve/motivation +

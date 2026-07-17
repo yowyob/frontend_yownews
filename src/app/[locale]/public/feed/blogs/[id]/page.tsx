@@ -9,8 +9,8 @@ export default async function PublicBlogDetailPage({ params }: { params: Promise
     <div className="lv-root">
       <style>{LANDING_CSS}</style>
       <Header />
-      <main style={{ padding: '40px 20px', minHeight: '80vh', background: '#F9FAFB' }}>
-        <ContentDetailView contentType="BLOG" id={id} />
+      <main style={{ padding: '40px 20px', minHeight: '80vh', background: '#fff' }}>
+        <ContentDetailView contentType="BLOG" id={id} bleed={false} />
       </main>
       <Footer />
     </div>

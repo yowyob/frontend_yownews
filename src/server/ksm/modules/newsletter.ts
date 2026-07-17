@@ -7,7 +7,7 @@ import { serverEnv } from '@/env';
 // Le module newsletter renvoie des entités BRUTES (pas d'enveloppe ApiResponse),
 // donc on appelle callKsm en `raw` puis on parse/valide la réponse nous-mêmes.
 
-export type RedacteurStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type RedacteurStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVOKED';
 // Statut d'une PUBLICATION (newsletter_entity) : gate admin qui révèle la rédaction.
 export type NewsletterStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 // Statut d'un CONTENU (newsletter_content_entity) : cycle de rédaction/modération.
@@ -149,6 +149,19 @@ export async function rejectRedacteurRequest(session: AppSession, id: string, re
   const res = await callKsm<Response>(
     `/api/v1/newsletter/admin/redacteurs/requests/${id}/reject`,
     { method: 'POST', body: { reason }, raw: true },
+    { session },
+  );
+  return readRaw<RedacteurRequestEntity>(res);
+}
+
+// Révoque un rédacteur précédemment APPROVED (transition de statut métier — distinct du rejet,
+// qui s'applique à une demande jamais approuvée). La route BFF appelante retire en plus le rôle
+// RBAC NEWSLETTER_EDITOR via administration.revokeRole — les deux actions sont complémentaires,
+// pas redondantes (cf. Bug 4).
+export async function revokeRedacteurRequest(session: AppSession, id: string) {
+  const res = await callKsm<Response>(
+    `/api/v1/newsletter/admin/redacteurs/requests/${id}/revoke`,
+    { method: 'POST', body: {}, raw: true },
     { session },
   );
   return readRaw<RedacteurRequestEntity>(res);

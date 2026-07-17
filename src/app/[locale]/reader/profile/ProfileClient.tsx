@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link } from '@/i18n/navigation';
 import { apiFetch, BffApiError } from '@/lib/api-client';
-import { EDUCATION_DOMAINS } from '@/lib/education-domains';
 import BlogPreviewModal, { type BlogPreviewData } from '@/components/education/BlogPreviewModal';
 
 type Application = {
@@ -97,6 +96,10 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
   const [domains, setDomains] = useState<string[]>([]);
   const [proofUrl, setProofUrl] = useState('');
   const [motivation, setMotivation] = useState('');
+  // Domaines proposés — mêmes données live que ContentEditor (/api/education/domains), pas la
+  // constante EDUCATION_DOMAINS statique/obsolète (elle ne couvrait plus tous les domaines réels,
+  // ex. CUISINE) : un candidat rédacteur doit choisir parmi ce qu'il pourra réellement publier.
+  const [domainOptions, setDomainOptions] = useState<string[]>([]);
 
   // Posts + compteurs follow (branche Rédacteur/Admin)
   const [posts, setPosts] = useState<Blog[] | null>(null);
@@ -117,6 +120,9 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
         if (!cancelled) setLoading(false);
       }
     })();
+    apiFetch<string[]>('/api/education/domains')
+      .then((data) => { if (!cancelled) setDomainOptions(Array.isArray(data) ? data : []); })
+      .catch(() => { if (!cancelled) setDomainOptions([]); });
     return () => { cancelled = true; };
   }, [isEditor]);
 
@@ -270,6 +276,23 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
                 Candidature en attente{application.domains?.length ? ` · ${application.domains.join(', ')}` : ''}
               </span>
             </>
+          ) : application?.status === 'APPROVED' ? (
+            <>
+              <p style={{ fontSize: 14, color: 'var(--gray-600)', margin: '0 0 12px' }}>
+                Votre candidature est approuvée 🎉 — <strong>reconnectez-vous</strong> pour activer votre
+                espace Rédacteur (création de blogs, podcasts, cours…).
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  try { await apiFetch('/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
+                  window.location.href = '/auth/login';
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', borderRadius: 8, padding: '10px 18px', background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Se reconnecter
+              </button>
+            </>
           ) : (
             <>
               <p style={{ fontSize: 14, color: 'var(--gray-600)', margin: '0 0 16px' }}>
@@ -280,7 +303,7 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
 
               <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 8 }}>Domaines</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                {EDUCATION_DOMAINS.map((d) => {
+                {domainOptions.map((d) => {
                   const on = domains.includes(d);
                   return (
                     <button key={d} type="button" onClick={() => toggleDomain(d)}

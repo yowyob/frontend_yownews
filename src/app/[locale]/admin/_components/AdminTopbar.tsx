@@ -29,11 +29,16 @@ function quickLinks(variant: Variant, spacePrefix: string) {
       href: variant === 'admin' ? '/admin/forums' : variant === 'reader' ? '/reader/forums' : '/editor/forum',
       icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="15" height="15"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
     },
-    {
-      label: 'Blogs',
-      href: variant === 'admin' ? '/admin/blogs' : variant === 'editor' ? '/editor/blog' : `${spacePrefix}/feed/blogs`,
-      icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="15" height="15"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6M9 9h1"/></svg>,
-    },
+    // « Blogs » mène à la gestion/écriture de blogs (admin → /admin/blogs, éditeur → /editor/blog) :
+    // sans objet pour un lecteur, qui ne rédige pas — et redondant avec « Feed » (même destination
+    // /reader/feed/blogs), ce qui faisait apparaître « Blogs » actif dès qu'on cliquait « Feed ».
+    ...(variant === 'reader'
+      ? []
+      : [{
+          label: 'Blogs',
+          href: variant === 'admin' ? '/admin/blogs' : '/editor/blog',
+          icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="15" height="15"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6M9 9h1"/></svg>,
+        }]),
   ];
 }
 
