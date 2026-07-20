@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import ContentEditor from '@/components/content-editor/ContentEditor';
-import RichTextField, { useRichTextEditor } from '@/components/content-editor/RichTextField';
+import BlockEditor from '@/components/block-editor/BlockEditor';
 import type { ContentTypeConfig, ExtraBodyResult, InitialContent } from '@/components/content-editor/types';
 import { clearDraft, isDraftMeaningful, loadDraft } from '@/components/content-editor/draftCache';
 import StatusBadge from '@/components/education/StatusBadge';
@@ -43,38 +43,40 @@ function formatDateTime(iso?: string | null) {
   return Number.isNaN(d.getTime()) ? '' : dateTimeFormatter.format(d);
 }
 
-// ── Onglet « Créer / Modifier » : éditeur générique + corps TipTap ─────────────
+// ── Onglet « Créer / Modifier » : métadonnées (étape 1) puis éditeur par blocs (étape 2) ───────
 function CreateBlogTab({ editing, onDone }: { editing: BlogDetail | null; onDone: () => void }) {
-  const editor = useRichTextEditor({ content: editing?.content ?? '', placeholder: 'Rédigez votre article…' });
+  // Corps = HTML sérialisé par l'éditeur par blocs. Le `key` sur ce composant (cf. BlogWorkspace)
+  // garantit un remontage par cible d'édition, donc `value` initial correct.
+  const [contenu, setContenu] = useState(editing?.content ?? '');
+  // Remontage du BlockEditor uniquement quand on injecte un nouveau HTML de départ (brouillon
+  // restauré) — pas à chaque frappe (l'éditeur ne relit `value` qu'au montage).
+  const [remountKey, setRemountKey] = useState(0);
 
   const config: ContentTypeConfig = {
     noun: 'Blog',
     createPath: editing ? `/api/education/blogs/${editing.id}` : '/api/education/blogs',
     method: editing ? 'PUT' : 'POST',
     coverPath: (id) => `/api/education/blogs/${id}/cover`,
-    extraFields: <RichTextField editor={editor} label="Contenu" />,
-    richEditor: editor,
+    twoStep: true,
+    extraFields: (
+      <BlockEditor key={remountKey} value={contenu} onChange={setContenu} mode="education" uploadEndpoint="/api/education/media" />
+    ),
     buildExtraBody: (): ExtraBodyResult => {
-      const text = editor?.getText() ?? '';
-      if (!text.trim()) return { ok: false, error: 'Le contenu est requis.' };
-      const readingTime = Math.max(1, Math.round(text.trim().split(/\s+/).length / WORDS_PER_MIN));
-      return {
-        ok: true,
-        body: {
-          content: editor?.getHTML() ?? '',
-          rawContent: JSON.stringify(editor?.getJSON() ?? {}),
-          readingTime,
-        },
-      };
+      const text = contenu.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      const hasMedia = /<(img|a)\b/i.test(contenu);
+      if (!text && !hasMedia) return { ok: false, error: 'Le contenu est requis.' };
+      const readingTime = Math.max(1, Math.round((text ? text.split(/\s+/).length : 0) / WORDS_PER_MIN));
+      return { ok: true, body: { content: contenu, rawContent: '', readingTime } };
     },
-    resetExtra: () => editor?.commands.clearContent(),
+    resetExtra: () => setContenu(''),
     draftKey: DRAFT_KIND,
-    getDraftExtra: () => ({ contentHtml: editor?.getHTML() ?? '' }),
+    getDraftExtra: () => ({ contentHtml: contenu }),
   };
 
   const onDraftRestored = (extra: Record<string, unknown>) => {
     if (typeof extra.contentHtml === 'string' && extra.contentHtml) {
-      editor?.commands.setContent(extra.contentHtml);
+      setContenu(extra.contentHtml);
+      setRemountKey((k) => k + 1); // force le BlockEditor à repartir du HTML restauré
     }
   };
 

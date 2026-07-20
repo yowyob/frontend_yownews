@@ -22,7 +22,7 @@ export function BlogsSection() {
             Voir tous les articles
           </Link>
         </div>
-        <div className="lv-grid-3">
+        <div className="lv-grid-cards">
           {STATIC_BLOGS.map((b) => (
             <ContentFeedCard
               key={b.id}
@@ -31,6 +31,7 @@ export function BlogsSection() {
               favorited={false}
               onToggleFavorite={() => {}}
               showActions={false}
+              surface
             />
           ))}
         </div>

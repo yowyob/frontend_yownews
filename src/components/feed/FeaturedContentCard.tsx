@@ -63,7 +63,7 @@ export default function FeaturedContentCard({ item, spacePrefix }: { item: FeedI
       href={href}
       className="feed-featured"
       style={{
-        display: 'grid', gridTemplateColumns: '1.1fr 1fr', minHeight: '280px',
+        display: 'grid', gridTemplateColumns: '1.1fr 1fr', height: '300px',
         background: '#fff', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '16px',
         overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,.06)', textDecoration: 'none', color: 'inherit',
         marginBottom: '28px', transition: 'box-shadow .15s',
@@ -134,7 +134,7 @@ export default function FeaturedContentCard({ item, spacePrefix }: { item: FeedI
         </div>
       </div>
     </Link>
-    <style>{`@media(max-width:640px){ .feed-featured{ grid-template-columns: 1fr!important; } .feed-featured > div:first-child{ height: 200px; } }`}</style>
+    <style>{`@media(max-width:640px){ .feed-featured{ grid-template-columns: 1fr!important; height: auto!important; } .feed-featured > div:first-child{ height: 200px; } }`}</style>
     </>
   );
 }

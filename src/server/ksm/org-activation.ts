@@ -54,7 +54,23 @@ export async function checkOrgSubscription(organizationId: string): Promise<OrgS
         logger.error({ organizationId }, 'ksm.org_activation.admin_session_unavailable');
         return { subscribed: false, effectiveServices: [] };
       }
-      services = await getOrganizationServices(freshAdminSession, organizationId);
+      try {
+        services = await getOrganizationServices(freshAdminSession, organizationId);
+      } catch (retryCause) {
+        // Un 401 qui SURVIT à un login admin frais n'est pas une péremption de token : c'est un
+        // refus côté KSM (ex. contexte d'organisation incohérent). Le laisser remonter tel quel
+        // serait trompeur — le client mappe tout 401 sur « session expirée » et renvoie au login,
+        // masquant la vraie cause. On le convertit en erreur explicite.
+        if (retryCause instanceof HttpError && retryCause.status === 401) {
+          logger.error({ organizationId, cause: retryCause }, 'ksm.org_activation.services_read_denied');
+          throw new HttpError({
+            status: 502,
+            errorCode: 'ORG_SERVICES_UNAVAILABLE',
+            message: "Impossible de vérifier l'abonnement de cette organisation auprès du serveur.",
+          });
+        }
+        throw retryCause;
+      }
     } else {
       throw cause;
     }

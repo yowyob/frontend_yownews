@@ -1,14 +1,18 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api-client';
 import { coverPathFor } from './contentLinks';
 import CoverFallback from './CoverFallback';
 import ArticleLayout from './ArticleLayout';
 import AudioPlayer from './AudioPlayer';
-import { Link, useRouter } from '@/i18n/navigation';
+import { Link, useRouter, getPathname } from '@/i18n/navigation';
 import { useSessionUser } from '@/components/providers/session-provider';
 
 export type DetailContentType = 'BLOG' | 'PODCAST' | 'COURSE';
+
+// Segment de la route publique (rend le même composant, sans session) par type de contenu.
+const PUBLIC_SEG: Record<DetailContentType, string> = { BLOG: 'blogs', PODCAST: 'podcasts', COURSE: 'cours' };
 
 type ContentDetail = {
   id: string;
@@ -26,9 +30,9 @@ type ContentDetail = {
   createdAt?: string | null;
 };
 
-type AdminUser = { userId: string; firstName: string | null; lastName: string | null; email: string };
-
 type RatingStats = { totalLikes: number; totalDislikes: number; hasLiked: boolean; hasDisliked: boolean };
+
+type CourseUnit = { id: string; title: string; duration?: number | null };
 
 type CommentEntity = { id: string; content: string; commentByUser: string; commentByName?: string | null; createdAt?: string | null };
 type CommentReplyEntity = { id: string; content: string; replyByUserId: string; replyByName?: string | null; createdAt?: string | null };
@@ -90,7 +94,7 @@ export default function ContentDetailView({ contentType, id, bleed = true }: { c
   // Course states
   const [courseProgress, setCourseProgress] = useState<{ percent: number; completedUnitIds: string[]; enrolled: boolean } | null>(null);
   const [courseBusy, setCourseBusy] = useState(false);
-  const [courseUnits, setCourseUnits] = useState<any[]>([]);
+  const [courseUnits, setCourseUnits] = useState<CourseUnit[]>([]);
 
   useEffect(() => {
     if (!item?.authorId) return;
@@ -106,7 +110,7 @@ export default function ContentDetailView({ contentType, id, bleed = true }: { c
   useEffect(() => {
     if (contentType !== 'COURSE' || !id) return;
     let cancelled = false;
-    apiFetch<any[]>(`/api/education/courses/${id}/units`)
+    apiFetch<CourseUnit[]>(`/api/education/courses/${id}/units`)
       .then((units) => {
         if (!cancelled) setCourseUnits(units);
       })
@@ -182,25 +186,16 @@ export default function ContentDetailView({ contentType, id, bleed = true }: { c
     return () => { cancelled = true; };
   }, [contentType, id]);
 
-  // Résolution du nom d'auteur — best-effort, réservé aux viewers admin (seuls autorisés
-  // sur /api/admin/users) ; échoue silencieusement pour rédacteur/lecteur (repli sur authorRedacteur
-  // ci-dessous si l'auteur a une newsletter, sinon id tronqué affiché).
+  // Résolution du nom d'auteur — via /api/users/[id]/name, qui résout le VRAI nom côté serveur
+  // (session admin, sans exposer email/rôles) et fonctionne pour TOUT viewer authentifié, admin ou
+  // non. Best-effort : si null, on retombe sur l'id tronqué (authorLabel). On n'utilise plus le
+  // rédacteur newsletter comme source de nom (ses prenom/nom peuvent valoir username/email).
   useEffect(() => {
     if (!item?.authorId) return;
     let cancelled = false;
-    (async () => {
-      try {
-        const users = await apiFetch<AdminUser[]>('/api/admin/users');
-        if (cancelled) return;
-        const u = users.find((x) => x.userId === item.authorId);
-        if (u) {
-          const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
-          setAuthorName(full || u.email);
-        }
-      } catch {
-        /* non-admin : repli sur authorRedacteur (voir effet suivant) ou id tronqué */
-      }
-    })();
+    apiFetch<{ name: string | null }>(`/api/users/${item.authorId}/name`)
+      .then((r) => { if (!cancelled && r?.name) setAuthorName(r.name); })
+      .catch(() => { /* repli sur id tronqué */ });
     return () => { cancelled = true; };
   }, [item?.authorId]);
 
@@ -214,9 +209,9 @@ export default function ContentDetailView({ contentType, id, bleed = true }: { c
       .then((r) => {
         if (cancelled || !r) return;
         setAuthorRedacteur(r);
-        // Repli nom d'auteur pour les viewers non-admin (donnée déjà disponible ici, sans appel
-        // supplémentaire) — ne remplace pas une résolution admin déjà réussie.
-        setAuthorName((cur) => cur ?? ([r.prenom, r.nom].filter(Boolean).join(' ').trim() || cur));
+        // NB : on n'utilise plus prenom/nom du rédacteur comme nom d'auteur (ils peuvent valoir
+        // username/email). Le nom vient de /api/users/[id]/name ci-dessus. `authorRedacteur` ne
+        // sert plus qu'au bouton « S'abonner à la newsletter ».
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -237,17 +232,43 @@ export default function ContentDetailView({ contentType, id, bleed = true }: { c
   }, [authorRedacteur]);
 
   const [shareCopied, setShareCopied] = useState(false);
-  const handleShare = async () => {
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try { await navigator.share({ title: item?.title, url: window.location.href }); } catch { /* annulé */ }
-      return;
-    }
+  const [shareOpen, setShareOpen] = useState(false);
+  const shareRef = useRef<HTMLDivElement>(null);
+  const locale = useLocale();
+
+  // Lien PUBLIC (route /public/feed/... — même rendu, sans session), pas l'URL courante qui peut
+  // être sous /reader, /editor ou /admin et donc inaccessible au destinataire. getPathname gère le
+  // préfixe de locale (as-needed : rien en fr, /en en anglais). L'origine n'est lue qu'au rendu du
+  // menu (qui n'apparaît qu'après un clic, donc côté client) — pas de risque d'écart d'hydratation.
+  const sharePath = getPathname({ href: `/public/feed/${PUBLIC_SEG[contentType]}/${id}`, locale });
+  const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}${sharePath}`;
+  const shareTitle = item?.title ?? '';
+
+  // Intentions de partage web (aucun SDK, aucun compte tiers, aucune dépendance).
+  const socialLinks = [
+    { label: 'WhatsApp', href: `https://wa.me/?text=${encodeURIComponent(`${shareTitle} ${shareUrl}`)}` },
+    { label: 'Facebook', href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}` },
+    { label: 'X', href: `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareTitle)}` },
+    { label: 'LinkedIn', href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}` },
+  ];
+
+  const copyShareLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(shareUrl);
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 2000);
     } catch { /* presse-papiers indisponible */ }
   };
+
+  // Fermeture du menu au clic extérieur et à Échap.
+  useEffect(() => {
+    if (!shareOpen) return;
+    const onDown = (e: MouseEvent) => { if (shareRef.current && !shareRef.current.contains(e.target as Node)) setShareOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShareOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [shareOpen]);
 
   const subscribeToRedacteur = () => {
     if (!authorRedacteur || subscribeBusy) return;
@@ -403,7 +424,12 @@ export default function ContentDetailView({ contentType, id, bleed = true }: { c
     return <div style={{ padding: '60px', textAlign: 'center', color: 'var(--gray-500, #6b7280)' }}>Chargement…</div>;
   }
 
-  const authorLabel = authorName ?? (item.authorId ? `${item.authorId.slice(0, 8)}…` : 'Auteur inconnu');
+  // Garde anti-doublon : si le nom résolu ressemble encore à « username email » (donnée dégradée
+  // contenant « @ »), on ne garde que le premier segment non-email plutôt que d'afficher l'email.
+  const cleanAuthorName = authorName
+    ? (authorName.includes('@') ? (authorName.split(/\s+/).find((w) => !w.includes('@')) ?? authorName.split('@')[0]) : authorName)
+    : null;
+  const authorLabel = cleanAuthorName ?? (item.authorId ? `${item.authorId.slice(0, 8)}…` : 'Auteur inconnu');
   const body = contentType === 'PODCAST' ? item.transcript : item.content;
   const allTags = [...(item.tags ?? []), ...(item.freeTags ?? [])];
   // Le contenu réel (TipTap) est déjà du HTML valide ; seules les données de démo (texte
@@ -521,10 +547,10 @@ export default function ContentDetailView({ contentType, id, bleed = true }: { c
                 type="button"
                 onClick={() => sendReaction(false)}
                 disabled={ratingBusy || !ratingStats}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', cursor: ratingBusy ? 'default' : 'pointer', padding: 0, color: ratingStats?.hasDisliked ? 'var(--dark, #111827)' : 'var(--gray-500, #6b7280)', fontSize: '14px' }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', cursor: ratingBusy ? 'default' : 'pointer', padding: 0, color: ratingStats?.hasDisliked ? 'var(--error, #EF4444)' : 'var(--gray-500, #6b7280)', fontSize: '14px' }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill={ratingStats?.hasDisliked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" style={{ transform: 'scaleY(-1)' }}><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
-                Je n&apos;aime pas
+                Je n&apos;aime pas{ratingStats && ratingStats.totalDislikes > 0 ? ` (${ratingStats.totalDislikes})` : ''}
               </button>
             </div>
           )}
@@ -595,14 +621,48 @@ export default function ContentDetailView({ contentType, id, bleed = true }: { c
                 <svg width="16" height="16" viewBox="0 0 24 24" fill={favorited ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z"/></svg>
                 {favorited ? 'Enregistré' : 'Ajouter aux favoris'}
               </button>
-              <button
-                type="button"
-                onClick={handleShare}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', cursor: 'pointer', padding: 0, fontSize: '14px', color: 'var(--gray-700, #374151)' }}
-              >
-                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 3.9M15.4 6.6L8.6 10.5"/></svg>
-                {shareCopied ? 'Lien copié !' : 'Partager'}
-              </button>
+              <div ref={shareRef} style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setShareOpen((o) => !o)}
+                  aria-haspopup="menu"
+                  aria-expanded={shareOpen}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', cursor: 'pointer', padding: 0, fontSize: '14px', color: 'var(--gray-700, #374151)' }}
+                >
+                  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 3.9M15.4 6.6L8.6 10.5"/></svg>
+                  {shareCopied ? 'Lien copié !' : 'Partager'}
+                </button>
+                {shareOpen && (
+                  <div
+                    role="menu"
+                    style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 10, minWidth: '190px', background: 'var(--white, #fff)', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,.12)', padding: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { copyShareLink(); setShareOpen(false); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '10px', border: 'none', background: 'none', cursor: 'pointer', padding: '9px 10px', borderRadius: '7px', fontSize: '14px', color: 'var(--gray-700, #374151)', textAlign: 'left' }}
+                    >
+                      <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                      Copier le lien
+                    </button>
+                    {socialLinks.map((s) => (
+                      <a
+                        key={s.label}
+                        role="menuitem"
+                        href={s.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setShareOpen(false)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '7px', fontSize: '14px', color: 'var(--gray-700, #374151)', textDecoration: 'none' }}
+                      >
+                        <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 8a3 3 0 10-2.83-4M6 12a3 3 0 100 0M18 16a3 3 0 10-2.83 4M8.6 13.5l6.8 3.9M15.4 6.6L8.6 10.5"/></svg>
+                        {s.label}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

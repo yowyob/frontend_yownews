@@ -63,6 +63,10 @@ export const LANDING_CSS = `
 .lv-link-more{color:var(--lv-orange);font-weight:600;font-size:14px}
 .lv-section.dark .lv-link-more{color:#ffb380}
 .lv-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+/* Cards de contenu (blogs/cours/podcasts) : mêmes dimensions que la grille du feed
+   (FeedView) — colonnes ~283px, gap 16px. Groupe centré car la landing n'affiche
+   que 3 items par section. minmax(0,283px) évite tout débordement si la place manque. */
+.lv-grid-cards{display:grid;grid-template-columns:repeat(3,minmax(0,283px));gap:16px;justify-content:center}
 
 /* CARDS */
 .lv-card-glass{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:18px;overflow:hidden;backdrop-filter:blur(8px);transition:.25s;display:block}
@@ -125,10 +129,12 @@ export const LANDING_CSS = `
 @media(max-width:960px){
   .lv-nav-links{display:none}
   .lv-grid-3,.lv-grid-feat,.lv-stats-grid,.lv-footer-grid,.lv-testi-grid{grid-template-columns:1fr 1fr}
+  .lv-grid-cards{grid-template-columns:repeat(2,minmax(0,283px))}
   .lv-hero{min-height:auto}
 }
 @media(max-width:560px){
   .lv-grid-3,.lv-grid-feat,.lv-stats-grid,.lv-footer-grid,.lv-testi-grid{grid-template-columns:1fr}
+  .lv-grid-cards{grid-template-columns:1fr}
   .lv-section h2,.lv-cta h2,.lv-features h2,.lv-testi-wrap h2{font-size:30px}
 }
 `;

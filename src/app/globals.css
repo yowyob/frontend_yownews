@@ -335,3 +335,17 @@
   .cta-btns{flex-direction:column;align-items:center}
   .cta-btns .btn{width:100%;max-width:280px;justify-content:center}
 }
+
+/* Images insérées dans le CORPS d'un contenu (article, chapitre de cours).
+   Déclaré ici, et non dans ArticleLayout, parce que les trois emplacements qui rendent ce HTML
+   — page de détail (ContentDetailView), aperçu en cours de rédaction (LivePreview) et modale de
+   prévisualisation (BlogPreviewModal) — partagent la classe mais pas le bloc <style> d'ArticleLayout.
+   Sans `max-width`, une image en pleine résolution déborderait de la colonne de lecture. */
+.content-detail-body img{max-width:100%;height:auto;border-radius:8px;display:block;margin:20px 0}
+
+/* Rendu lecteur des blocs de l'éditeur (callout / bouton / lien fichier) — les corps sont injectés
+   via dangerouslySetInnerHTML dans le feed, la page détail et les aperçus (classe partagée). */
+.content-detail-body .callout{background:var(--blue-light);border-left:3px solid var(--primary);padding:14px 18px;border-radius:10px;margin:18px 0}
+.content-detail-body .content-btn{display:inline-block;background:var(--accent);color:#fff;font-family:var(--font-d);font-weight:700;text-decoration:none;padding:11px 22px;border-radius:10px;margin:8px 0}
+.content-detail-body .content-file{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--gray-200);border-radius:10px;padding:9px 14px;text-decoration:none;color:var(--dark);font-weight:600;margin:8px 0}
+.content-detail-body .content-file::before{content:"PDF";font-family:var(--font-d);font-size:10px;font-weight:700;color:#fff;background:var(--accent);padding:3px 6px;border-radius:4px}

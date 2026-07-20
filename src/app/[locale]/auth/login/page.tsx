@@ -32,6 +32,23 @@ const SERVICE_LABELS: Record<string, string> = {
   FORUM: 'Forum',
 };
 
+/**
+ * Le pending de connexion a *réellement* expiré — le serveur le signale explicitement par
+ * `LOGIN_EXPIRED`. Tester le seul statut 401 était trompeur : n'importe quel refus KSM en aval
+ * (ex. lecture des services d'une organisation) était présenté comme une expiration de session et
+ * renvoyait l'utilisateur au formulaire de connexion, masquant la cause réelle.
+ */
+function isLoginExpired(err: unknown): boolean {
+  return err instanceof BffApiError && err.status === 401 && err.errorCode === 'LOGIN_EXPIRED';
+}
+
+/** Message du serveur quand il en fournit un — plus utile qu'un « une erreur est survenue » générique. */
+function errorMessage(err: unknown): string {
+  return err instanceof BffApiError && err.message
+    ? err.message
+    : 'Une erreur est survenue. Veuillez réessayer.';
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { refresh } = useSession();
@@ -137,12 +154,12 @@ export default function LoginPage() {
       });
       await finishLogin(res);
     } catch (err) {
-      if (err instanceof BffApiError && err.status === 401) {
+      if (isLoginExpired(err)) {
         // pendingId expiré : retour à l'étape identifiants
         setOrgStep(null);
         setGlobalError('La session de connexion a expiré. Veuillez vous reconnecter.');
       } else {
-        setGlobalError('Une erreur est survenue. Veuillez réessayer.');
+        setGlobalError(errorMessage(err));
       }
     } finally {
       setLoading(false);
@@ -183,11 +200,11 @@ export default function LoginPage() {
       });
       await handleOrgModeResult(res);
     } catch (err) {
-      if (err instanceof BffApiError && err.status === 401) {
+      if (isLoginExpired(err)) {
         setOrgModeStep(null);
         setGlobalError('La session de connexion a expiré. Veuillez vous reconnecter.');
       } else {
-        setGlobalError('Une erreur est survenue. Veuillez réessayer.');
+        setGlobalError(errorMessage(err));
       }
     } finally {
       setLoading(false);
@@ -209,11 +226,11 @@ export default function LoginPage() {
       });
       await handleOrgModeResult(res);
     } catch (err) {
-      if (err instanceof BffApiError && err.status === 401) {
+      if (isLoginExpired(err)) {
         setSubscribeStep(null);
         setGlobalError('La session de connexion a expiré. Veuillez vous reconnecter.');
       } else {
-        setGlobalError('Une erreur est survenue. Veuillez réessayer.');
+        setGlobalError(errorMessage(err));
       }
     } finally {
       setLoading(false);

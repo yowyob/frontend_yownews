@@ -69,6 +69,20 @@ async function readRaw<T>(res: Response): Promise<T> {
   return (text ? (JSON.parse(text) as T) : (null as T));
 }
 
+// ── Média inséré dans le corps d'un contenu (éditeur par blocs) ──
+// Image en ligne ou fichier joint, hébergés côté KSM. Renvoie une URL publique ABSOLUE (l'email
+// n'a pas d'URL de base), écrite telle quelle dans le HTML `contenu`.
+export type NewsletterMediaUpload = { id: string; url: string };
+
+export async function uploadNewsletterMedia(session: AppSession, formData: FormData) {
+  const res = await callKsm<Response>(
+    '/api/v1/newsletter/media',
+    { method: 'POST', body: formData, raw: true },
+    { session },
+  );
+  return readRaw<NewsletterMediaUpload>(res);
+}
+
 // ── Catégories ──
 export async function listCategories(session: AppSession) {
   const res = await callKsm<Response>('/api/v1/newsletter/categorie', { method: 'GET', raw: true }, { session });

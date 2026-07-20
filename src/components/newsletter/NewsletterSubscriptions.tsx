@@ -33,11 +33,13 @@ export default function NewsletterSubscriptions({ email: initialEmail }: { email
   };
 
   useEffect(() => {
-    apiFetch<Categorie[]>('/api/newsletter/categories')
-      .then(setAllCategories)
-      .catch(() => {});
-    loadSubscribed();
-    loadFollowed();
+    void (async () => {
+      apiFetch<Categorie[]>('/api/newsletter/categories')
+        .then(setAllCategories)
+        .catch(() => {});
+      loadSubscribed();
+      loadFollowed();
+    })();
   }, []);
 
   const handleTagToggle = async (cat: Categorie, isSubscribed: boolean) => {
@@ -65,8 +67,8 @@ export default function NewsletterSubscriptions({ email: initialEmail }: { email
         await loadSubscribed();
         setMessage({ text: `Abonné à la catégorie ${cat.nom} !`, type: 'success' });
       }
-    } catch (e: any) {
-      setMessage({ text: e.message || 'Une erreur est survenue', type: 'error' });
+    } catch (e) {
+      setMessage({ text: e instanceof Error ? e.message : 'Une erreur est survenue', type: 'error' });
     } finally {
       setBusyTags((prev) => ({ ...prev, [cat.id]: false }));
     }
@@ -81,8 +83,8 @@ export default function NewsletterSubscriptions({ email: initialEmail }: { email
       await apiFetch(`/api/newsletter/subscriptions/redacteurs/${redacteur.id}`, { method: 'DELETE' });
       setFollowed((prev) => prev?.filter((r) => r.id !== redacteur.id) ?? null);
       setMessage({ text: `Désabonné des newsletters de ${[redacteur.prenom, redacteur.nom].filter(Boolean).join(' ') || redacteur.email}`, type: 'success' });
-    } catch (e: any) {
-      setMessage({ text: e.message || 'Une erreur est survenue', type: 'error' });
+    } catch (e) {
+      setMessage({ text: e instanceof Error ? e.message : 'Une erreur est survenue', type: 'error' });
     } finally {
       setBusyRedacteurs((prev) => ({ ...prev, [redacteur.id]: false }));
     }
@@ -239,8 +241,14 @@ export default function NewsletterSubscriptions({ email: initialEmail }: { email
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {followed.map((r) => {
-              const name = [r.prenom, r.nom].filter(Boolean).join(' ') || r.email;
-              const initials = name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+              // Anti-doublon : si prenom/nom sont encore dégradés (contiennent « @ » ou égalent la
+              // partie locale de l'email), on n'affiche que l'email, une seule fois.
+              const emailLocal = r.email?.split('@')[0] ?? '';
+              const looksBad = (s?: string) => !!s && (s.includes('@') || s === emailLocal);
+              const cleanParts = [r.prenom, r.nom].filter((s) => s && !looksBad(s));
+              const name = cleanParts.join(' ').trim() || r.email;
+              const showEmail = name !== r.email;
+              const initials = name.split(/\s+/).map((n) => n[0]).join('').toUpperCase().slice(0, 2);
               const loading = busyRedacteurs[r.id];
               return (
                 <div key={r.id} style={{
@@ -269,7 +277,7 @@ export default function NewsletterSubscriptions({ email: initialEmail }: { email
                     </div>
                     <div>
                       <span style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>{name}</span>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>{r.email}</div>
+                      {showEmail && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{r.email}</div>}
                     </div>
                   </div>
                   <button

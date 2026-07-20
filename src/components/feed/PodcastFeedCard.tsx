@@ -34,13 +34,16 @@ function formatDate(iso?: string | null) {
 }
 
 export default function PodcastFeedCard({
-  item, spacePrefix, favorited, onToggleFavorite, showActions = true,
+  item, spacePrefix, favorited, onToggleFavorite, showActions = true, surface = false,
 }: {
   item: FeedItem;
   spacePrefix: string;
   favorited: boolean;
   onToggleFavorite: (item: FeedItem, next: boolean) => void;
   showActions?: boolean;
+  // Pose la carte sur une surface blanche (bord + ombre). À activer quand le parent a un fond
+  // clair/quasi-blanc (ex: section landing podcasts), sinon la carte transparente s'y confond.
+  surface?: boolean;
 }) {
   const [coverFailed, setCoverFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -78,13 +81,25 @@ export default function PodcastFeedCard({
 
   return (
     <Link href={href} style={{
-      display: 'block', background: 'transparent',
+      display: 'block',
+      background: surface ? '#fff' : 'transparent',
+      color: surface ? 'var(--lv-ink, #0f172a)' : 'inherit',
+      border: surface ? '1px solid var(--gray-200, #e5e7eb)' : undefined,
+      boxShadow: surface ? '0 1px 3px rgba(15,23,42,.06)' : undefined,
       borderRadius: '14px', overflow: 'hidden',
-      textDecoration: 'none', color: 'inherit',
-      transition: 'opacity .15s',
+      textDecoration: 'none',
+      transition: 'opacity .15s, box-shadow .2s',
     }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '.85'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+      onMouseEnter={(e) => {
+        const el = e.currentTarget as HTMLElement;
+        if (surface) el.style.boxShadow = '0 12px 30px rgba(15,58,122,.12)';
+        else el.style.opacity = '.85';
+      }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget as HTMLElement;
+        if (surface) el.style.boxShadow = '0 1px 3px rgba(15,23,42,.06)';
+        else el.style.opacity = '1';
+      }}
     >
       {/* Cover + overlay */}
       <div style={{ position: 'relative', height: '200px', background: 'var(--gray-100, #f3f4f6)', overflow: 'hidden' }}>

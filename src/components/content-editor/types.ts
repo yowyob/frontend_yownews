@@ -64,4 +64,8 @@ export type ContentTypeConfig = {
   // Bloc spécifique affiché dans l'aperçu live à la place du corps (ex. formateur/durée/
   // niveau pour un cours, qui n'a pas de corps riche).
   previewExtra?: ReactNode;
+  // Flux en 2 étapes : étape 1 = métadonnées (titre, résumé, couverture, classification),
+  // puis « Suivant » → étape 2 = le corps (`extraFields`, ex. éditeur par blocs) en pleine
+  // largeur. Quand actif, l'aperçu live latéral est masqué (le corps est son propre aperçu).
+  twoStep?: boolean;
 };

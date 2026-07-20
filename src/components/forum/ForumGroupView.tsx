@@ -130,6 +130,16 @@ function PostThread({ post, userId, onDelete }: { post: ForumPost; userId?: stri
   );
 }
 
+// Le KSM ne garantit aucun ordre sur les posts (pas d'ORDER BY côté repo) : on trie côté client
+// du plus ancien au plus récent. Les posts sans date remontent en tête (0), stable pour le reste.
+function sortByDateAsc(posts: ForumPost[]): ForumPost[] {
+  return [...posts].sort((a, b) => {
+    const ta = a.creationDate ? new Date(a.creationDate).getTime() : 0;
+    const tb = b.creationDate ? new Date(b.creationDate).getTime() : 0;
+    return ta - tb;
+  });
+}
+
 export default function ForumGroupView({ groupId, userId }: { groupId: string; userId?: string }) {
   const router = useAppRouter();
   const [group, setGroup] = useState<{ groupId: string; name: string; description?: string | null } | null>(null);
@@ -149,7 +159,7 @@ export default function ForumGroupView({ groupId, userId }: { groupId: string; u
       apiFetch<ForumCategorie[]>(`/api/forum/categories/group/${groupId}`).catch(() => []),
     ]).then(([g, p, c]) => {
       setGroup(g);
-      setPosts(Array.isArray(p) ? p : []);
+      setPosts(sortByDateAsc(Array.isArray(p) ? p : []));
       setCategories(Array.isArray(c) ? c : []);
       setLoading(false);
     });
@@ -165,7 +175,8 @@ export default function ForumGroupView({ groupId, userId }: { groupId: string; u
     setBusy(true);
     try {
       const created = await apiFetch<ForumPost>('/api/forum/posts', { method: 'POST', body: { title: title.trim(), content: content.trim(), groupId, categoriesIds: selCats } });
-      setPosts((prev) => [created, ...prev]);
+      // Tri du plus ancien au plus récent : un post neuf va en fin de liste.
+      setPosts((prev) => [...prev, created]);
       setTitle(''); setContent(''); setSelCats([]); setShowForm(false);
     } catch { /* best-effort */ }
     finally { setBusy(false); }

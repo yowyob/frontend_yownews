@@ -35,10 +35,19 @@ export type OrganizationServicesResponse = {
   effectiveServices: string[];
 };
 
+/** Services souscrits par une organisation. Lecture de niveau **plateforme** : l'organisation
+ *  concernée est déjà portée par l'URL, il ne faut donc **pas** l'injecter aussi en
+ *  `X-Organization-Id`. C'est `organizationId: null` explicite, pour la même raison que
+ *  `listMyOrganizations` ci-dessus : l'appelant est la session admin plateforme, dont le token
+ *  est lié à l'org **plateforme** (cf. `admin-session.ts` `selectContext(..., ctx.organizations[0])`).
+ *  Envoyer `X-Organization-Id: <org externe du owner>` avec ce token produisait une contradiction
+ *  entre la revendication d'org du token et l'en-tête, que le gate kernel rejetait en 401 — ce qui
+ *  cassait tout le mode organisation dès la sélection d'une org (le client mappait ce 401 sur
+ *  « session expirée » et renvoyait au login). */
 export function getOrganizationServices(session: AppSession, organizationId: string) {
   return callKsm<OrganizationServicesResponse>(
     `/api/organizations/${organizationId}/services`,
-    { method: 'GET', organizationId },
+    { method: 'GET', organizationId: null },
     { session },
   );
 }

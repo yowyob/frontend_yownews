@@ -22,7 +22,7 @@ export function CoursesSection() {
             Voir tous les cours
           </Link>
         </div>
-        <div className="lv-grid-3">
+        <div className="lv-grid-cards">
           {STATIC_COURSES.map((c) => (
             <ContentFeedCard
               key={c.id}
@@ -31,6 +31,7 @@ export function CoursesSection() {
               favorited={false}
               onToggleFavorite={() => {}}
               showActions={false}
+              surface
             />
           ))}
         </div>

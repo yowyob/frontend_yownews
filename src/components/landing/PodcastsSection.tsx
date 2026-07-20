@@ -24,7 +24,7 @@ export function PodcastsSection() {
             Tous les podcasts
           </Link>
         </div>
-        <div className="lv-grid-3">
+        <div className="lv-grid-cards">
           {STATIC_PODCASTS.map((p) => (
             <PodcastFeedCard
               key={p.id}
@@ -33,6 +33,7 @@ export function PodcastsSection() {
               favorited={false}
               onToggleFavorite={() => {}}
               showActions={false}
+              surface
             />
           ))}
         </div>

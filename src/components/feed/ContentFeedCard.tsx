@@ -52,13 +52,16 @@ function formatDate(iso?: string | null) {
 }
 
 export default function ContentFeedCard({
-  item, spacePrefix, favorited, onToggleFavorite, showActions = true,
+  item, spacePrefix, favorited, onToggleFavorite, showActions = true, surface = false,
 }: {
   item: FeedItem;
   spacePrefix: string;
   favorited: boolean;
   onToggleFavorite: (item: FeedItem, next: boolean) => void;
   showActions?: boolean;
+  // Pose la carte sur une surface blanche (bord + ombre). À activer quand le parent a un fond
+  // sombre (ex: sections landing `dark lv-grad`), sinon la carte transparente s'y confond.
+  surface?: boolean;
 }) {
   const [coverFailed, setCoverFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -97,13 +100,25 @@ export default function ContentFeedCard({
 
   return (
     <Link href={href} style={{
-      display: 'block', background: 'transparent',
+      display: 'block',
+      background: surface ? '#fff' : 'transparent',
+      color: surface ? 'var(--lv-ink, #0f172a)' : 'inherit',
+      border: surface ? '1px solid var(--gray-200, #e5e7eb)' : undefined,
+      boxShadow: surface ? '0 1px 3px rgba(15,23,42,.06)' : undefined,
       borderRadius: '14px', overflow: 'hidden',
-      textDecoration: 'none', color: 'inherit',
-      transition: 'opacity .15s',
+      textDecoration: 'none',
+      transition: 'opacity .15s, box-shadow .2s',
     }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '.85'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+      onMouseEnter={(e) => {
+        const el = e.currentTarget as HTMLElement;
+        if (surface) el.style.boxShadow = '0 12px 30px rgba(15,58,122,.12)';
+        else el.style.opacity = '.85';
+      }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget as HTMLElement;
+        if (surface) el.style.boxShadow = '0 1px 3px rgba(15,23,42,.06)';
+        else el.style.opacity = '1';
+      }}
     >
       {/* Image avec overlay + badges */}
       <div style={{ position: 'relative', height: '200px', background: 'var(--gray-100, #f3f4f6)', overflow: 'hidden' }}>
@@ -145,7 +160,7 @@ export default function ContentFeedCard({
 
       {/* Corps */}
       <div style={{ padding: '16px 18px' }}>
-        <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '15px', fontWeight: 700, margin: '0 0 6px', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '15px', fontWeight: 700, margin: '0 0 6px', lineHeight: 1.35, color: surface ? 'var(--lv-ink, #0f172a)' : undefined, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {item.title}
         </h2>
         {item.description && (

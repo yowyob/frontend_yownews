@@ -331,6 +331,37 @@ export async function uploadBlogCover(session: AppSession, id: string, formData:
   return readRaw<BlogEntity>(res);
 }
 
+// ── Médias en ligne (images insérées DANS le corps d'un contenu) ─────────────────────────────
+//
+// À distinguer de la couverture ci-dessus : un contenu ne référence qu'UNE ressource (son
+// `id_ressource`), ce qui plafonnerait à une image. Ici chaque téléversement crée côté KSM une
+// ressource AUTONOME, que personne ne référence, adressée par son propre id — d'où la possibilité
+// d'en avoir autant qu'on veut dans un même article. L'URL renvoyée est écrite telle quelle dans
+// le HTML du corps, ce qui porte du même coup la position de l'image dans le texte.
+
+export type EditorMediaUpload = { id: string; url: string };
+
+/** Téléverse une image de corps (multipart, champ `file`). Renvoie son id et son URL publique. */
+export async function uploadEditorMedia(session: AppSession, formData: FormData) {
+  const res = await callKsm<Response>(
+    '/api/v1/education/media',
+    { method: 'POST', body: formData, raw: true },
+    { session },
+  );
+  return readRaw<EditorMediaUpload>(res);
+}
+
+/** Flux binaire d'une image de corps. L'endpoint KSM est **public** (`/api/public/**` est
+ *  `permitAll`) : les images d'un article publié doivent rester affichables sans session, y
+ *  compris pour un visiteur anonyme. On appelle donc sans authentification. */
+export function getEditorMedia(ressourceId: string) {
+  return callKsm<Response>(
+    `/api/public/education/media/${ressourceId}`,
+    { method: 'GET', raw: true, authenticated: false },
+    {},
+  );
+}
+
 // Renvoie la réponse brute (flux binaire) de la cover, pour streaming direct côté route BFF.
 export function getBlogCover(session: AppSession, id: string) {
   return callKsm<Response>(

@@ -1,9 +1,9 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import RowMenu, { type MenuItem } from '@/components/education/RowMenu';
 import NewsletterSubscriptions from '@/components/newsletter/NewsletterSubscriptions';
-import RichTextField, { useRichTextEditor } from '@/components/content-editor/RichTextField';
+import BlockEditor from '@/components/block-editor/BlockEditor';
 
 type RedacteurStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 type NewsletterStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -171,15 +171,12 @@ function CreatePublicationForm({ editing, onCreated }: { editing?: Publication |
 function ContentSpace({ publication, onBack }: { publication: Publication; onBack: () => void }) {
   const [contents, setContents] = useState<ContentItem[] | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [formStep, setFormStep] = useState<1 | 2>(1);
   const [titre, setTitre] = useState('');
+  const [contenu, setContenu] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [confirmPublishId, setConfirmPublishId] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const editor = useRichTextEditor({ placeholder: 'Rédigez le contenu…' });
 
   const load = async () => {
     try { setContents(await apiFetch<ContentItem[]>(`/api/newsletter/newsletters/${publication.id}/contents`)); }
@@ -187,36 +184,25 @@ function ContentSpace({ publication, onBack }: { publication: Publication; onBac
   };
   // eslint-disable-next-line react-hooks/set-state-in-effect -- `load` réutilisé après création/soumission.
   useEffect(() => { load(); }, [publication.id]);
-  useEffect(() => () => { if (coverPreview) URL.revokeObjectURL(coverPreview); }, [coverPreview]);
 
-  const pickCover = (f: File | null) => {
-    if (coverPreview) URL.revokeObjectURL(coverPreview);
-    setCoverFile(f);
-    setCoverPreview(f ? URL.createObjectURL(f) : null);
-    if (fileRef.current) fileRef.current.value = '';
-  };
+  const openForm = () => { setTitre(''); setContenu(''); setFormStep(1); setShowForm(true); };
+  const closeForm = () => { setShowForm(false); setTitre(''); setContenu(''); setFormStep(1); };
 
   const submit = async () => {
     setMessage(null);
-    const contenu = editor?.getHTML() ?? '';
-    if (!titre.trim() || !(editor?.getText().trim())) {
+    // Contenu = HTML des blocs. On vérifie qu'il reste du texte/média après retrait des balises.
+    const hasContent = contenu.replace(/<[^>]*>/g, '').trim().length > 0 || /<(img|a)\b/i.test(contenu);
+    if (!titre.trim() || !hasContent) {
       setMessage({ kind: 'err', text: 'Titre et contenu sont requis.' });
       return;
     }
     setBusy(true);
     try {
-      const created = await apiFetch<{ id: string }>(`/api/newsletter/newsletters/${publication.id}/contents`, {
+      await apiFetch(`/api/newsletter/newsletters/${publication.id}/contents`, {
         method: 'POST',
         body: { titre: titre.trim(), contenu },
       });
-      if (coverFile && created?.id) {
-        try {
-          const fd = new FormData();
-          fd.append('cover', coverFile, coverFile.name);
-          await apiFetch(`/api/newsletter/contents/${created.id}/cover`, { method: 'POST', body: fd, json: false });
-        } catch { /* image facultative */ }
-      }
-      setTitre(''); editor?.commands.clearContent(); pickCover(null); setShowForm(false);
+      closeForm();
       setMessage({ kind: 'ok', text: 'Contenu créé en brouillon.' });
       load();
     } catch (e) {
@@ -262,7 +248,7 @@ function ContentSpace({ publication, onBack }: { publication: Publication; onBac
       )}
 
       {!showForm && (
-        <button type="button" onClick={() => setShowForm(true)} style={{
+        <button type="button" onClick={openForm} style={{
           border: 'none', borderRadius: '8px', padding: '10px 22px', background: 'var(--accent)',
           color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer', marginBottom: '20px',
         }}>+ Nouveau contenu</button>
@@ -270,55 +256,38 @@ function ContentSpace({ publication, onBack }: { publication: Publication; onBac
 
       {showForm && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px', padding: '18px', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '12px' }}>
-          <div>
-            <label style={label}>Titre</label>
-            <input style={input} value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Titre du contenu" />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="sub" style={{ fontWeight: 600 }}>Étape {formStep} sur 2 — {formStep === 1 ? 'Titre' : 'Contenu'}</span>
+            <button type="button" onClick={closeForm} style={{ border: 'none', background: 'none', color: 'var(--gray-500)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Annuler</button>
           </div>
-          <div>
-            <label style={label}>Image de couverture</label>
-            <label
-              htmlFor="content-cover-input"
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: '8px', padding: coverPreview ? '12px' : '26px 16px', cursor: 'pointer', textAlign: 'center',
-                border: '2px dashed var(--gray-300, #d1d5db)', borderRadius: '12px', background: 'var(--gray-50, #f9fafb)',
-              }}
-              onDragOver={(e) => { e.preventDefault(); }}
-              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f && f.type.startsWith('image/')) pickCover(f); }}
-            >
-              {coverPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={coverPreview} alt="Aperçu de la couverture" style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', objectFit: 'cover' }} />
-              ) : (
-                <>
-                  <svg width="28" height="28" fill="none" stroke="var(--gray-400, #9ca3af)" strokeWidth="1.7" viewBox="0 0 24 24">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <path d="M21 15l-5-5L5 21" />
-                  </svg>
-                  <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--gray-700, #374151)' }}>Cliquez ou glissez une image de couverture</span>
-                  <span style={{ fontSize: '12px', color: 'var(--gray-400, #9ca3af)' }}>PNG, JPG — facultatif</span>
-                </>
-              )}
-            </label>
-            <input id="content-cover-input" ref={fileRef} type="file" accept="image/*" onChange={(e) => pickCover(e.target.files?.[0] ?? null)} style={{ display: 'none' }} />
-            {coverPreview && (
-              <button type="button" onClick={() => pickCover(null)} style={{ marginTop: '8px', border: 'none', background: 'none', color: 'var(--accent)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>
-                Retirer l&apos;image
-              </button>
-            )}
-          </div>
-          <RichTextField editor={editor} label="Contenu" />
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button type="button" onClick={submit} disabled={busy} style={{
-              border: 'none', borderRadius: '8px', padding: '10px 22px', background: 'var(--accent)',
-              color: '#fff', fontWeight: 700, fontSize: '14px', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1,
-            }}>{busy ? 'Création…' : 'Créer en brouillon'}</button>
-            <button type="button" onClick={() => { setShowForm(false); setTitre(''); editor?.commands.clearContent(); pickCover(null); }} style={{
-              border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '8px', padding: '10px 18px', background: '#fff',
-              color: 'var(--gray-700, #374151)', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
-            }}>Annuler</button>
-          </div>
+
+          {formStep === 1 ? (
+            <>
+              <div>
+                <label style={label}>Titre</label>
+                <input style={input} value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Titre du contenu" />
+              </div>
+              <button type="button" onClick={() => setFormStep(2)} disabled={!titre.trim()} style={{
+                alignSelf: 'flex-start', border: 'none', borderRadius: '8px', padding: '10px 22px',
+                background: 'var(--accent)', color: '#fff', fontWeight: 700, fontSize: '14px',
+                cursor: titre.trim() ? 'pointer' : 'default', opacity: titre.trim() ? 1 : 0.6,
+              }}>Suivant →</button>
+            </>
+          ) : (
+            <>
+              <BlockEditor value={contenu} onChange={setContenu} mode="newsletter" uploadEndpoint="/api/newsletter/media" />
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" onClick={() => setFormStep(1)} style={{
+                  border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '8px', padding: '10px 18px', background: '#fff',
+                  color: 'var(--gray-700, #374151)', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
+                }}>← Titre</button>
+                <button type="button" onClick={submit} disabled={busy} style={{
+                  border: 'none', borderRadius: '8px', padding: '10px 22px', background: 'var(--accent)',
+                  color: '#fff', fontWeight: 700, fontSize: '14px', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1,
+                }}>{busy ? 'Création…' : 'Créer en brouillon'}</button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

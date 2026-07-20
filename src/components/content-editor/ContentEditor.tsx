@@ -77,6 +77,11 @@ export default function ContentEditor(
   const [audioPreview, setAudioPreview] = useState<string | null>(initial?.audioUrl ?? null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err' | 'warn'; text: string } | null>(null);
+  // Flux 2 étapes (config.twoStep) : 1 = métadonnées, 2 = corps. Sans twoStep, tout est visible.
+  const [step, setStep] = useState<1 | 2>(1);
+  const twoStep = config.twoStep === true;
+  const showMeta = !twoStep || step === 1;
+  const showBody = !twoStep || step === 2;
   const fileRef = useRef<HTMLInputElement>(null);
   const audioFileRef = useRef<HTMLInputElement>(null);
 
@@ -284,6 +289,13 @@ export default function ContentEditor(
     <div style={{ maxWidth: '760px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {message && <div style={msgStyle(message.kind)}>{msgIcon(message.kind)}{message.text}</div>}
 
+      {twoStep && (
+        <div className="sub" style={{ fontWeight: 600, color: 'var(--gray-500, #6b7280)' }}>
+          Étape {step} sur 2 — {step === 1 ? 'Métadonnées' : 'Contenu'}
+        </div>
+      )}
+
+      {showMeta && (<>
       {/* Titre — grand champ sans distraction, la rédaction commence ici */}
       <input
         value={title}
@@ -424,33 +436,52 @@ export default function ContentEditor(
         </div>
       </Section>
 
-      {/* Corps du contenu / transcription — après les métadonnées, pour renseigner d'abord le contexte du contenu */}
-      {config.extraFields}
+      </>)}
 
-      <div style={{ position: 'sticky', bottom: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-        <button type="button" disabled={saving} onClick={submit} style={{
-          background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '999px',
-          padding: '13px 28px', fontSize: '14px', fontFamily: 'var(--font-d)', fontWeight: 700,
-          cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.65 : 1,
-          boxShadow: '0 4px 16px rgba(255,107,53,.3)', transition: 'transform .15s, box-shadow .15s',
-        }}
-          onMouseEnter={(e) => { if (!saving) { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(255,107,53,.4)'; } }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'none'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(255,107,53,.3)'; }}
-        >{saving ? 'Enregistrement…' : (config.method === 'PUT' ? 'Enregistrer les modifications' : 'Créer le brouillon')}</button>
+      {/* Corps du contenu / transcription — étape 2 en mode 2 étapes */}
+      {showBody && config.extraFields}
+
+      <div style={{ position: 'sticky', bottom: '16px', display: 'flex', justifyContent: twoStep && step === 2 ? 'space-between' : 'flex-end', gap: '10px' }}>
+        {twoStep && step === 2 && (
+          <button type="button" onClick={() => setStep(1)} style={{
+            background: '#fff', color: 'var(--gray-700, #374151)', border: '1px solid var(--gray-200, #e5e7eb)',
+            borderRadius: '999px', padding: '13px 22px', fontSize: '14px', fontFamily: 'var(--font-d)', fontWeight: 600, cursor: 'pointer',
+          }}>← Métadonnées</button>
+        )}
+        {twoStep && step === 1 ? (
+          <button type="button" disabled={!title.trim()} onClick={() => setStep(2)} style={{
+            background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '999px',
+            padding: '13px 28px', fontSize: '14px', fontFamily: 'var(--font-d)', fontWeight: 700,
+            cursor: title.trim() ? 'pointer' : 'default', opacity: title.trim() ? 1 : 0.6,
+            boxShadow: '0 4px 16px rgba(255,107,53,.3)',
+          }}>Suivant →</button>
+        ) : (
+          <button type="button" disabled={saving} onClick={submit} style={{
+            background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '999px',
+            padding: '13px 28px', fontSize: '14px', fontFamily: 'var(--font-d)', fontWeight: 700,
+            cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.65 : 1,
+            boxShadow: '0 4px 16px rgba(255,107,53,.3)', transition: 'transform .15s, box-shadow .15s',
+          }}
+            onMouseEnter={(e) => { if (!saving) { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(255,107,53,.4)'; } }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'none'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(255,107,53,.3)'; }}
+          >{saving ? 'Enregistrement…' : (config.method === 'PUT' ? 'Enregistrer les modifications' : 'Créer le brouillon')}</button>
+        )}
       </div>
     </div>
 
-    <div className="content-editor-preview" style={{ width: '100%', maxWidth: '520px', position: 'sticky', top: '16px' }}>
-      <LivePreview
-        typeLabel={config.noun}
-        title={title}
-        description={description}
-        tags={previewTags}
-        coverSrc={coverPreview}
-        bodyHtml={config.richEditor ? liveBodyHtml : undefined}
-        extra={config.previewExtra}
-      />
-    </div>
+    {!twoStep && (
+      <div className="content-editor-preview" style={{ width: '100%', maxWidth: '520px', position: 'sticky', top: '16px' }}>
+        <LivePreview
+          typeLabel={config.noun}
+          title={title}
+          description={description}
+          tags={previewTags}
+          coverSrc={coverPreview}
+          bodyHtml={config.richEditor ? liveBodyHtml : undefined}
+          extra={config.previewExtra}
+        />
+      </div>
+    )}
 
     <style>{`
       @media(max-width: 1200px) {
