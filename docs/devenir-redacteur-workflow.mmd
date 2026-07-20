@@ -1,0 +1,58 @@
+sequenceDiagram
+    autonumber
+    actor L as Lecteur
+    actor A as Admin
+    participant RP as Front /reader/profile
+    participant BFF as BFF (Next /api)
+    participant EDU as KSM education editor-applications
+    participant ADM as KSM administration
+    participant DB as Postgres
+
+    Note over L,DB: 1) Depot de la candidature
+    L->>RP: Remplit le formulaire (domaines, proofUrl, motivation)
+    RP->>BFF: POST /api/role-requests
+    BFF->>EDU: POST /api/v1/education/editor-applications (+ email/nom session)
+    EDU->>EDU: Verifie "1 seule PENDING par user" + valide les domaines
+    EDU->>DB: INSERT editor_application (status=PENDING)
+    DB-->>EDU: id
+    EDU-->>BFF: 201 Created
+    BFF-->>RP: Candidature envoyee
+
+    Note over L,DB: 2) Suivi du statut (Lecteur)
+    L->>RP: Ouvre son profil
+    RP->>BFF: GET /api/role-requests/me
+    BFF->>EDU: GET /editor-applications/me
+    EDU->>DB: SELECT par user_id (contexte courant)
+    DB-->>EDU: candidatures
+    EDU-->>RP: statut (PENDING / APPROVED / REJECTED)
+
+    Note over A,DB: 3) Revue admin
+    A->>BFF: GET /api/admin/role-requests
+    BFF->>EDU: GET /editor-applications?status=PENDING (gate education:content:manage)
+    EDU->>DB: SELECT + filtre tenant
+    DB-->>EDU: liste
+    EDU-->>A: candidatures a traiter
+
+    Note over A,DB: 4a) Validation (enregistre l'autorisation, n'assigne PAS le role)
+    A->>BFF: POST /api/admin/role-requests/{id}/approve
+    BFF->>EDU: PATCH /editor-applications/{id}/status (APPROVED)
+    EDU->>DB: findById -> UPDATE status=APPROVED, decided_at/by
+    EDU-->>BFF: 200
+    BFF-->>A: Valide
+    Note right of A: L'admin ne PEUT PAS assigner le role ici : EDUCATION_EDITOR_PERMISSIONS est de type<br/>ORGANIZATION, et l'assigner sur l'org freelance du candidat exige d'en etre membre (401 KSM).<br/>L'admin autorise, l'utilisateur materialise. Voir docs/service-role-provisioning.md
+
+    Note over L,DB: 4a-bis) Materialisation du role, a la reconnexion du Redacteur
+    L->>BFF: POST /api/auth/login
+    BFF->>EDU: GET /editor-applications/me -> status APPROVED => niveau "editor"
+    BFF->>ADM: POST /administration/users/{userId}/roles (EDUCATION_EDITOR_PERMISSIONS,<br/>scope ORGANIZATION = son org, via SON token : il en est OWNER)
+    ADM->>DB: INSERT user_role_assignment
+    BFF->>BFF: re-login interne (un token deja emis ne reflete jamais un role assigne apres coup)
+    BFF-->>L: Session redacteur -> atterrissage /editor
+
+    Note over A,DB: 4b) Refus
+    A->>BFF: POST /api/admin/role-requests/{id}/reject
+    BFF->>EDU: PATCH /editor-applications/{id}/status (REJECTED)
+    EDU->>DB: UPDATE status=REJECTED
+    EDU-->>BFF: 200
+    BFF-->>A: Refuse
+    Note right of A: Aucun role assigne. Le Lecteur peut redeposer une candidature.
