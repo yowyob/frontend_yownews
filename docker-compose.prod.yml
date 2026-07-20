@@ -7,8 +7,8 @@ services:
     environment:
       NODE_ENV: "production"
       PORT: "3000"
-      KSM_BASE_URL: "https://kernel-core.yowyob.com/kernel-api"
-      KSM_CLIENT_ID: "newsletter-frontend"
+      KSM_BASE_URL: "https://kernel-core.yowyob.com"
+      KSM_CLIENT_ID: "yownews-frontend"
       KSM_API_KEY: "${KSM_API_KEY:?}"
       SESSION_SECRET: "${SESSION_SECRET:?}"
       REDIS_HOST: "yownews-redis"
@@ -21,7 +21,7 @@ services:
       start_period: 45s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.yownews.rule=Host(`newsletter.yowyob.com`)"
+      - "traefik.http.routers.yownews.rule=Host(`education.yowyob.com`)"
       - "traefik.http.routers.yownews.entrypoints=websecure"
       - "traefik.http.routers.yownews.tls=true"
       - "traefik.http.routers.yownews.tls.certresolver=letsencrypt"
