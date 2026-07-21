@@ -4,10 +4,9 @@ import { fail, ok } from '@/server/api-response';
 import { authenticatedRoute } from '@/server/handlers';
 import { updateEmployeeRole, removeEmployee } from '@/server/ksm/modules/employees';
 import { findRoleIdByCode } from '@/server/ksm/modules/administration';
-import { getAdminSession } from '@/server/ksm/admin-session';
+import { orgOperationSession } from '@/server/ksm/admin-session';
 import { isOrganizationManager } from '@/lib/roles';
-
-const ASSIGNABLE_ROLE_CODES = ['EDUCATION_EDITOR_PERMISSIONS', 'NEWSLETTER_EDITOR', 'FORUM_USER_PERMISSIONS'];
+import { isRoleAssignable } from '@/lib/org-roles';
 
 /** Modifie le rôle d'un employé déjà membre de l'organisation active. */
 export async function PUT(
@@ -29,11 +28,12 @@ export async function PUT(
     const { id } = await params;
     const body = (await request.json()) as { roleCode?: string };
     const roleCode = String(body.roleCode ?? '').trim();
-    if (!ASSIGNABLE_ROLE_CODES.includes(roleCode)) {
-      return fail(400, 'VALIDATION_ERROR', 'roleCode invalide.');
+    // Rôle unique, borné par les services souscrits de l'org.
+    if (!isRoleAssignable(roleCode, session.workspace?.services)) {
+      return fail(400, 'VALIDATION_ERROR', "Ce rôle n'est pas attribuable pour cette organisation (service non souscrit).");
     }
 
-    const adminSession = await getAdminSession();
+    const adminSession = await orgOperationSession(session);
     if (!adminSession) return fail(500, 'ADMIN_SESSION_FAILED', 'No admin session');
 
     const roleId = await findRoleIdByCode(adminSession, orgId, roleCode);
@@ -61,7 +61,7 @@ export async function DELETE(
       return fail(400, 'NO_ORGANIZATION', "Aucune organisation active sélectionnée.");
     }
 
-    const adminSession = await getAdminSession();
+    const adminSession = await orgOperationSession(session);
     if (!adminSession) return fail(500, 'ADMIN_SESSION_FAILED', 'No admin session');
 
     const { id } = await params;

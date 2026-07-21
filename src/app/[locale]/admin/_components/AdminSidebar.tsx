@@ -17,23 +17,26 @@ const ROLE_BADGE_STYLE: Record<'admin' | 'editor' | 'reader', { bg: string; fg: 
   reader: { bg: '#FF6B35', fg: '#fff' },
 };
 
-type NavItem = { href: string; label: string; icon: React.ReactNode; badge?: number; enabled?: boolean; adminOnly?: boolean };
+// adminOnly : visible aux deux types d'admin (plateforme ET org). platformOnly : réservé au staff
+// plateforme (pages tenant-wide), masqué en mode organisation. orgHidden : masqué en mode org (pas
+// d'équivalent /editor, ex. Notifications → éviterait un lien /admin/* qui redirige vers le landing).
+type NavItem = { href: string; label: string; icon: React.ReactNode; badge?: number; enabled?: boolean; adminOnly?: boolean; platformOnly?: boolean; orgHidden?: boolean };
 
 const NAV: { label: string; items: NavItem[] }[] = [
   {
     label: 'Général',
     items: [
       { href: '/admin/dashboard', label: 'Tableau de bord', enabled: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> },
-      { href: '/admin/notifications', label: 'Notifications', icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg> },
+      { href: '/admin/notifications', label: 'Notifications', orgHidden: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg> },
       { href: '/admin/favorites', label: 'Favoris', enabled: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z"/></svg> },
     ],
   },
   {
     label: 'Gestion',
     items: [
-      { href: '/admin/users', label: 'Utilisateurs', enabled: true, adminOnly: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg> },
-      { href: '/admin/role-requests', label: 'Demandes', enabled: true, adminOnly: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM19 8v6M22 11h-6"/></svg> },
-      { href: '/editor/organisation', label: 'Organisation', enabled: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857"/></svg> },
+      { href: '/admin/users', label: 'Utilisateurs', enabled: true, platformOnly: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg> },
+      { href: '/admin/role-requests', label: 'Demandes', enabled: true, platformOnly: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM19 8v6M22 11h-6"/></svg> },
+      { href: '/editor/organisation', label: 'Organisation', enabled: true, adminOnly: true, icon: <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857"/></svg> },
     ],
   },
   {
@@ -123,7 +126,11 @@ function EvaluateAppModal({ onClose }: { onClose: () => void }) {
 
 const SIDEBAR_COLLAPSE_KEY = 'yn:sidebar-collapsed';
 
-export default function AdminSidebar({ displayName, variant = 'admin', roleBadge }: { displayName: string; email: string; variant?: 'admin' | 'editor' | 'reader'; roleBadge: string }) {
+export default function AdminSidebar({ displayName, variant = 'admin', roleBadge, orgMode = false, hasEducation = true, hasForum = true }: { displayName: string; email: string; variant?: 'admin' | 'editor' | 'reader'; roleBadge: string; orgMode?: boolean; hasEducation?: boolean; hasForum?: boolean }) {
+  // En mode org, une section de contenu ne s'affiche que si l'utilisateur détient un rôle du module
+  // (hasEducation/hasForum). Hors mode org, aucun filtrage (valeurs par défaut à true).
+  const showEducation = !orgMode || hasEducation;
+  const showForum = !orgMode || hasForum;
   const pathname = usePathname();
   const router = useRouter();
   const [educationOpen, setEducationOpen] = useState(true);
@@ -156,13 +163,16 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
   // Le variant ne pilote que la navigation ; le badge de rôle vient de la session (prop roleBadge).
   const isAdmin = variant === 'admin';
   const isReader = variant === 'reader';
+  // Admin PLATEFORME (staff) = variant admin hors mode org. L'admin d'ORG (orgMode) partage le badge
+  // « Administrateur » mais navigue dans l'espace /editor, sans Newsletter ni pages tenant-wide.
+  const isPlatformAdmin = isAdmin && !orgMode;
 
-  const spacePrefix = isReader ? '/reader' : isAdmin ? '/admin' : '/editor';
+  const spacePrefix = isReader ? '/reader' : isPlatformAdmin ? '/admin' : '/editor';
   const profileHref = `${spacePrefix}/profile`;
 
   const [userCount, setUserCount] = useState<number | null>(null);
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isPlatformAdmin) return;
     let cancelled = false;
     (async () => {
       try {
@@ -171,12 +181,20 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
       } catch { /* badge masqué si indisponible */ }
     })();
     return () => { cancelled = true; };
-  }, [isAdmin]);
+  }, [isPlatformAdmin]);
 
   const navGroups = isReader
     ? READER_NAV
     : NAV
-        .map((group) => ({ ...group, items: group.items.filter((item) => isAdmin || !item.adminOnly) }))
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => {
+            if (orgMode && item.orgHidden) return false;   // Notifications — pas d'équivalent /editor
+            if (item.platformOnly) return isPlatformAdmin; // Utilisateurs, Demandes — staff plateforme
+            if (item.adminOnly) return isAdmin;            // Organisation — admin plateforme OU org
+            return true;
+          }),
+        }))
         .filter((group) => group.items.length > 0 || group.label === 'Gestion' || group.label === 'Communauté');
 
   // Les groupes (Général, Gestion, …) sont eux-mêmes des accordéons — un seul ouvert à la fois,
@@ -195,7 +213,7 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
         const href =
           item.label === 'Tableau de bord' ? `${spacePrefix}/dashboard`
           : item.label === 'Favoris' ? `${spacePrefix}/favorites`
-          : item.label === 'Forums' ? (isAdmin ? '/admin/forums' : isReader ? '/reader/forums' : '/editor/forum')
+          : item.label === 'Forums' ? (isPlatformAdmin ? '/admin/forums' : isReader ? '/reader/forums' : '/editor/forum')
           : item.href;
         if (pathname === href || pathname.startsWith(href + '/')) return group.label;
       }
@@ -226,7 +244,7 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
         const href =
           item.label === 'Tableau de bord' ? `${spacePrefix}/dashboard`
           : item.label === 'Favoris' ? `${spacePrefix}/favorites`
-          : item.label === 'Forums' ? (isAdmin ? '/admin/forums' : isReader ? '/reader/forums' : '/editor/forum')
+          : item.label === 'Forums' ? (isPlatformAdmin ? '/admin/forums' : isReader ? '/reader/forums' : '/editor/forum')
           : item.href;
         if (pathname === href || pathname.startsWith(href + '/')) return item.label;
       }
@@ -398,7 +416,7 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                 const href =
                   item.label === 'Tableau de bord' ? `${spacePrefix}/dashboard`
                   : item.label === 'Favoris' ? `${spacePrefix}/favorites`
-                  : item.label === 'Forums' ? (isAdmin ? '/admin/forums' : '/reader/forums')
+                  : item.label === 'Forums' ? (isPlatformAdmin ? '/admin/forums' : '/reader/forums')
                   : item.href;
                 const badgeValue = item.label === 'Utilisateurs' ? userCount : item.badge ?? null;
                 const active = pathname === href || pathname.startsWith(href + '/');
@@ -419,7 +437,7 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                       borderLeft: '3px solid transparent',
                     }}>
                       <span style={{ flexShrink: 0 }}>{item.icon}</span>
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }} className="sb-text">{item.label}</span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }} className="sb-text">{orgMode && item.label === 'Organisation' ? 'Employé' : item.label}</span>
                       {badge}
                     </div>
                   );
@@ -466,7 +484,8 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
               {/* Dropdown Education + Newsletter (après Gestion) */}
               {group.label === 'Gestion' && !isReader && (
                 <>
-                  {/* Education */}
+                  {/* Education — en mode org, seulement si l'utilisateur a un rôle éducation. */}
+                  {showEducation && (<>
                   {renderDropdownToggle(
                     'Education',
                     <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" width="17" height="17"><path d="M12 2L2 7l10 5 10-5-10-5M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>,
@@ -476,7 +495,7 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
 
                   {educationOpen && (
                     <div className="sb-text" style={{ marginBottom: '4px' }}>
-                      {isAdmin ? (
+                      {isPlatformAdmin ? (
                         <>
                           {renderSectionLabel('Blog')}
                           {renderSubLink('/admin/blogs', 'Mes blogs', true)}
@@ -503,9 +522,11 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                       )}
                     </div>
                   )}
+                  </>)}
 
-                  {/* Newsletter : dropdown (admin) ou lien direct (éditeur) */}
-                  {isAdmin ? (
+                  {/* Newsletter : masquée en mode organisation (les newsletters n'y sont pas
+                      manipulées) ; sinon dropdown (admin plateforme) ou lien direct (éditeur). */}
+                  {orgMode ? null : isPlatformAdmin ? (
                     <>
                       {renderDropdownToggle(
                         'Newsletter',
@@ -550,10 +571,11 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                 </>
               )}
 
-              {/* Forums : dropdown (admin) ou lien direct (éditeur) — Communauté section */}
-              {group.label === 'Communauté' && !isReader && (
+              {/* Forums : dropdown (admin plateforme) ou lien direct (éditeur/org) — Communauté.
+                  En mode org, seulement si l'utilisateur a un rôle forum. */}
+              {group.label === 'Communauté' && !isReader && showForum && (
                 <>
-                  {isAdmin ? (
+                  {isPlatformAdmin ? (
                     <>
                       {renderDropdownToggle(
                         'Forums',

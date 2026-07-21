@@ -2,7 +2,7 @@ import 'server-only';
 import { redirect } from 'next/navigation';
 import { readSession } from '@/server/session';
 import { SessionProvider } from '@/components/providers/session-provider';
-import { roleBadgeLabel, roleVariant } from '@/lib/roles';
+import { hasEducationRole, hasForumRole, roleBadgeLabelForVariant, variantForMode } from '@/lib/roles';
 import AdminSidebar from '../admin/_components/AdminSidebar';
 import AdminTopbar from '../admin/_components/AdminTopbar';
 import type { ClientSession } from '@/lib/types/auth';
@@ -21,10 +21,14 @@ export default async function ProfileLayout({ children }: { children: React.Reac
   const displayName =
     [session.user.firstName, session.user.lastName].filter(Boolean).join(' ') || session.user.username || session.user.email;
 
+  const authorities = session.user.permissions ?? session.user.roles;
+  const orgMode = session.workspace?.orgMode === true;
+  const variant = variantForMode(authorities, orgMode);
+
   return (
     <SessionProvider initialSession={clientSession}>
       <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--gray-50)', overflow: 'hidden' }}>
-        <AdminSidebar displayName={displayName} email={session.user.email} variant={roleVariant(session.user.permissions ?? session.user.roles)} roleBadge={roleBadgeLabel(session.user.permissions ?? session.user.roles)} />
+        <AdminSidebar displayName={displayName} email={session.user.email} variant={variant} roleBadge={roleBadgeLabelForVariant(variant)} orgMode={orgMode} hasEducation={hasEducationRole(authorities)} hasForum={hasForumRole(authorities)} />
         <div
           style={{ marginLeft: 'var(--sb-w, 260px)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', overflowY: 'auto', transition: 'margin-left .3s ease' }}
           className="admin-main"

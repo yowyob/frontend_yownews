@@ -287,6 +287,45 @@ export async function ensureServiceRolesSelf(
 // appelé depuis la route de login. Cf. docs/service-role-provisioning.md.
 
 /**
+ * Identité à utiliser pour les opérations d'administration d'une ORGANISATION (employés, rôles).
+ *
+ * En mode organisation, l'org vit dans un tenant DÉDIÉ : l'admin plateforme (autre tenant) ne la voit
+ * même pas (`404 ORGANIZATION_NOT_FOUND`). C'est donc le compte de l'utilisateur — owner, qui détient
+ * `ROLE_OWNER#TENANT` (tenant:admin) sur SON tenant — qui doit agir. Hors mode organisation, on garde
+ * l'identité admin partagée (comportement freelance/plateforme inchangé).
+ */
+export async function orgOperationSession(session: AppSession): Promise<AppSession | null> {
+  if (session.workspace?.orgMode === true) return session;
+  return getAdminSession();
+}
+
+/**
+ * Attribue à un utilisateur, org-scopés et best-effort, une liste de rôles secondaires (par code) —
+ * utilisé pour compléter le rôle principal d'un employé (ex. ajouter FORUM_EDITOR à un rédacteur
+ * éducation, KSM ne portant qu'un roleId par appartenance). L'échec d'un code n'interrompt pas les
+ * autres. `adminSession` sert d'identité privilégiée pour résoudre et attribuer.
+ */
+export async function assignExtraRoles(
+  adminSession: AppSession,
+  organizationId: string,
+  userId: string,
+  codes: readonly string[],
+): Promise<void> {
+  for (const code of codes) {
+    try {
+      const roleId = await findRoleIdByCode(adminSession, organizationId, code);
+      if (!roleId) {
+        logger.warn({ code, organizationId }, 'ksm.org_role.extra_role_not_found');
+        continue;
+      }
+      await assignRole(adminSession, userId, roleId, organizationId);
+    } catch (cause) {
+      logger.error({ cause, code, organizationId, userId }, 'ksm.org_role.extra_role_assign_failed');
+    }
+  }
+}
+
+/**
  * Attribue à un owner d'organisation le rôle le plus élevé de chaque module
  * (EDUCATION_MANAGER, NEWSLETTER_MANAGER, FORUM_MANAGER — jamais
  * SUPER_EDUCATION_SERVICES_MANAGER, réservé au staff plateforme), en utilisant

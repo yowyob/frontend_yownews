@@ -61,6 +61,9 @@ export type ContentTypeConfig = {
   // Éditeur TipTap du corps (article/transcription) — permet à l'aperçu live de suivre son
   // contenu en direct. Absent pour les types sans corps riche (ex. cours).
   richEditor?: Editor | null;
+  // HTML du corps quand il ne provient PAS d'un éditeur TipTap mais d'un éditeur par blocs
+  // (le corps est déjà sérialisé en HTML côté type concret). Alimente l'aperçu live en 2 étapes.
+  liveBodyHtml?: string;
   // Bloc spécifique affiché dans l'aperçu live à la place du corps (ex. formateur/durée/
   // niveau pour un cours, qui n'a pas de corps riche).
   previewExtra?: ReactNode;

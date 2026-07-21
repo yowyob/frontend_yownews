@@ -106,11 +106,18 @@ function CommunityForums() {
 }
 
 // ── Formulaire de création / édition inline ──
-function ForumForm({ editing, onDone }: { editing?: DiscussionGroup | null; onDone: () => void }) {
+const FORUM_TYPE_OPTIONS: { value: GroupType; label: string; hint: string }[] = [
+  { value: 'PUBLIC', label: 'Forum public', hint: 'Ouvert et visible par tous' },
+  { value: 'COMMUNITY', label: 'Communauté', hint: 'Espace communautaire de l’organisation' },
+  { value: 'FORUM', label: 'Forum sur demande', hint: 'Adhésion soumise à validation' },
+];
+
+function ForumForm({ editing, onDone, orgMode = false }: { editing?: DiscussionGroup | null; onDone: () => void; orgMode?: boolean }) {
   const [name, setName] = useState(editing?.name ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
-  // Un seul type de forum sur la plateforme : PUBLIC.
-  const type: GroupType = 'PUBLIC';
+  // Hors mode organisation : un seul type (PUBLIC). En mode organisation, l'owner choisit le type
+  // (public / communauté / sur demande) — les types réintroduits pour l'espace org.
+  const [type, setType] = useState<GroupType>(editing?.type ?? 'PUBLIC');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
@@ -152,6 +159,17 @@ function ForumForm({ editing, onDone }: { editing?: DiscussionGroup | null; onDo
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="À propos de ce forum…"
           style={{ width: '100%', minHeight: '80px', border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
       </div>
+      {orgMode && (
+        <div>
+          <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', display: 'block' }}>Type de forum</label>
+          <select value={type} onChange={(e) => setType(e.target.value as GroupType)}
+            style={{ width: '100%', border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', boxSizing: 'border-box', background: '#fff' }}>
+            {FORUM_TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label} — {o.hint}</option>
+            ))}
+          </select>
+        </div>
+      )}
       {!editing && (
         <p style={{ margin: 0, fontSize: '12px', color: 'var(--gray-400)' }}>
           Votre proposition sera soumise à validation par un administrateur avant d&apos;être publiée.
@@ -167,7 +185,7 @@ function ForumForm({ editing, onDone }: { editing?: DiscussionGroup | null; onDo
   );
 }
 
-export default function MyForumsWorkspace({ userId }: { userId: string }) {
+export default function MyForumsWorkspace({ userId, orgMode = false }: { userId: string; orgMode?: boolean }) {
   const router = useAppRouter();
   const [groups, setGroups] = useState<DiscussionGroup[] | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -193,7 +211,7 @@ export default function MyForumsWorkspace({ userId }: { userId: string }) {
         <button type="button" onClick={() => setEditing(null)} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: '12px' }}>
            Mes forums
         </button>
-        <ForumForm editing={editing} onDone={() => { setEditing(null); load(); }} />
+        <ForumForm editing={editing} onDone={() => { setEditing(null); load(); }} orgMode={orgMode} />
       </div>
     );
   }
@@ -204,7 +222,7 @@ export default function MyForumsWorkspace({ userId }: { userId: string }) {
         <button type="button" onClick={() => setShowForm(false)} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: '12px' }}>
            Mes forums
         </button>
-        <ForumForm onDone={() => { setShowForm(false); load(); }} />
+        <ForumForm onDone={() => { setShowForm(false); load(); }} orgMode={orgMode} />
       </div>
     );
   }

@@ -26,7 +26,9 @@ type FollowCounts = { followers: number; following: number };
 // `view` : 'editor' = profil Rédacteur (onglet Posts) — utilisé par Rédacteur ET Admin ;
 //          'reader' = profil Lecteur avec la bannière « Devenir Rédacteur ».
 // `blogHref` : espace de rédaction à lier depuis le dropdown Post (/editor/blog ou /admin/blogs).
-type Props = { displayName: string; email: string; view: 'editor' | 'reader'; roleLabel: string; blogHref?: string };
+// `orgMode` : en mode organisation, on ne propose jamais « Devenir Rédacteur » (l'utilisateur est
+// owner/employé d'une org, pas un lecteur candidat) — on affiche directement la vue posts.
+type Props = { displayName: string; email: string; view: 'editor' | 'reader'; roleLabel: string; blogHref?: string; orgMode?: boolean };
 
 function initials(name: string) {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
@@ -85,8 +87,9 @@ function Dropdown({ label, active, disabled, children }: { label: string; active
   );
 }
 
-export default function ProfileClient({ displayName, email, view, roleLabel, blogHref = '/editor/blog' }: Props) {
-  const isEditor = view === 'editor';
+export default function ProfileClient({ displayName, email, view, roleLabel, blogHref = '/editor/blog', orgMode = false }: Props) {
+  // En mode org, on force la vue « éditeur » (posts) : pas de bannière « Devenir Rédacteur ».
+  const isEditor = view === 'editor' || orgMode;
   const [application, setApplication] = useState<Application | null>(null);
   const [loading, setLoading] = useState(view === 'reader');
   const [submitting, setSubmitting] = useState(false);
@@ -206,17 +209,23 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
         {isEditor && (
           <>
             <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--gray-400)', fontStyle: 'italic' }}>Aucune bio renseignée.</p>
+            {/* Mentions sociales (Abonnés / Abonnements / Posts) masquées en mode organisation :
+                un compte d'organisation n'est pas un profil social de rédacteur individuel. */}
+            {!orgMode && (
             <div style={{ display: 'flex', gap: 24, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--gray-100)' }}>
               <span style={{ fontSize: 13, color: 'var(--gray-600)' }}><b style={{ color: 'var(--primary)' }}>{counts?.followers ?? 0}</b> Abonnés</span>
               <span style={{ fontSize: 13, color: 'var(--gray-600)' }}><b style={{ color: 'var(--primary)' }}>{counts?.following ?? 0}</b> Abonnements</span>
               <span style={{ fontSize: 13, color: 'var(--gray-600)' }}><b style={{ color: 'var(--primary)' }}>{posts?.length ?? 0}</b> Posts</span>
             </div>
+            )}
           </>
         )}
       </div>
 
       {isEditor ? (
         <div style={card}>
+          {/* Dropdown Follow masqué en mode organisation (pas de fonction sociale). */}
+          {!orgMode && (
           <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--gray-200)', marginBottom: 16 }}>
             <Dropdown label="Follow" active>
               <div style={{ padding: '8px 10px', fontSize: 13, color: 'var(--gray-700)' }}>Abonnés <b>{counts?.followers ?? 0}</b></div>
@@ -224,6 +233,7 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
             </Dropdown>
             <Dropdown label="Edit Profile" disabled />
           </div>
+          )}
 
           {postsError && <div style={{ padding: '12px 14px', borderRadius: 10, background: '#FEF2F2', color: '#B91C1C', fontSize: 13, marginBottom: 12 }}>{postsError}</div>}
           {!posts && !postsError && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--gray-400)', fontSize: 14 }}>Chargement…</div>}

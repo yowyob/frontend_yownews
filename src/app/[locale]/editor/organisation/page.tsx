@@ -5,12 +5,8 @@ import { useWorkspace } from '@/components/providers/session-provider';
 import { apiFetch } from '@/lib/api-client';
 import type { EmployeeMembershipResponse } from '@/server/ksm/modules/employees';
 import type { OrgContentItem, OrgContentType } from '@/server/ksm/modules/education';
-
-const ROLE_OPTIONS = [
-  { code: 'EDUCATION_EDITOR_PERMISSIONS', label: 'Rédacteur Éducation' },
-  { code: 'NEWSLETTER_EDITOR', label: 'Rédacteur Newsletter' },
-  { code: 'FORUM_USER_PERMISSIONS', label: 'Membre Forum' },
-];
+import RowMenu from '@/components/education/RowMenu';
+import { orgRoleOptionsForServices, orgRoleLabel } from '@/lib/org-roles';
 
 const CONTENT_TYPE_OPTIONS: { value: OrgContentType; label: string }[] = [
   { value: 'blog', label: 'Blogs' },
@@ -31,12 +27,11 @@ export default function OrganisationPage() {
   const [employees, setEmployees] = useState<EmployeeMembershipResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRoleCode, setInviteRoleCode] = useState(ROLE_OPTIONS[0].code);
+  const [inviteRoleCode, setInviteRoleCode] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [roleDrafts, setRoleDrafts] = useState<Record<string, string>>({});
 
   const [contentType, setContentType] = useState<OrgContentType>('blog');
   const [orgContent, setOrgContent] = useState<OrgContentItem[]>([]);
@@ -45,6 +40,9 @@ export default function OrganisationPage() {
 
   const activeOrgId = workspace?.organizationId;
   const isPlatformOrg = workspace?.organizationCode === (process.env.NEXT_PUBLIC_KSM_PLATFORM_ORG_CODE || 'YOWYOB_EDU');
+  // Rôles attribuables, bornés par les services souscrits de l'org (Éducation et/ou Forum).
+  const roleOptions = orgRoleOptionsForServices(workspace?.services);
+  const selectedInviteRole = inviteRoleCode || roleOptions[0]?.code || '';
 
   const loadEmployees = React.useCallback(async () => {
     if (!activeOrgId || isPlatformOrg) {
@@ -101,7 +99,7 @@ export default function OrganisationPage() {
     try {
       await apiFetch('/api/org/employees', {
         method: 'POST',
-        body: { email: inviteEmail.trim(), roleCode: inviteRoleCode },
+        body: { email: inviteEmail.trim(), roleCode: selectedInviteRole },
       });
       setInviteSuccess(`Rôle attribué à ${inviteEmail}.`);
       setInviteEmail('');
@@ -115,9 +113,7 @@ export default function OrganisationPage() {
     }
   };
 
-  const handleRoleChange = async (membershipId: string) => {
-    const roleCode = roleDrafts[membershipId];
-    if (!roleCode) return;
+  const handleRoleChange = async (membershipId: string, roleCode: string) => {
     setSavingId(membershipId);
     try {
       await apiFetch(`/api/org/employees/${membershipId}`, {
@@ -228,33 +224,20 @@ export default function OrganisationPage() {
                   {employees.map((emp) => (
                     <tr key={emp.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
                       <td style={{ padding: '14px 8px', fontSize: '14px', fontWeight: 500, color: '#0F172A' }}>{emp.email}</td>
-                      <td style={{ padding: '14px 8px' }}>
-                        <select
-                          value={roleDrafts[emp.id] ?? emp.roleName ?? ROLE_OPTIONS[0].code}
-                          onChange={(e) => setRoleDrafts((d) => ({ ...d, [emp.id]: e.target.value }))}
-                          style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '13px' }}
-                        >
-                          {ROLE_OPTIONS.map((r) => (
-                            <option key={r.code} value={r.code}>{r.label}</option>
-                          ))}
-                        </select>
+                      <td style={{ padding: '14px 8px', fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
+                        {savingId === emp.id ? 'Enregistrement…' : orgRoleLabel(emp.roleName)}
                       </td>
-                      <td style={{ padding: '14px 8px', textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        {roleDrafts[emp.id] && roleDrafts[emp.id] !== emp.roleName && (
-                          <button
-                            onClick={() => handleRoleChange(emp.id)}
-                            disabled={savingId === emp.id}
-                            style={{ background: '#1F5FBF', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-                          >
-                            {savingId === emp.id ? 'Enregistrement…' : 'Enregistrer'}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleRemove(emp.id)}
-                          style={{ background: 'transparent', color: '#EF4444', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
-                        >
-                          Retirer
-                        </button>
+                      <td style={{ padding: '14px 8px', textAlign: 'right' }}>
+                        <RowMenu
+                          disabled={savingId === emp.id}
+                          items={[
+                            ...roleOptions.map((r) => ({
+                              label: `Définir comme ${r.label}`,
+                              onClick: () => handleRoleChange(emp.id, r.code),
+                            })),
+                            { label: "Retirer de l'organisation", onClick: () => handleRemove(emp.id), danger: true },
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -286,11 +269,12 @@ export default function OrganisationPage() {
             </div>
             <div style={{ marginBottom: '16px' }}>
               <select
-                value={inviteRoleCode}
+                value={selectedInviteRole}
                 onChange={(e) => setInviteRoleCode(e.target.value)}
                 style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '14px' }}
               >
-                {ROLE_OPTIONS.map((r) => (
+                {roleOptions.length === 0 && <option value="">Aucun service souscrit</option>}
+                {roleOptions.map((r) => (
                   <option key={r.code} value={r.code}>{r.label}</option>
                 ))}
               </select>

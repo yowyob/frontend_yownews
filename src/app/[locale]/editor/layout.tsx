@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { readSession } from '@/server/session';
 import { SessionProvider } from '@/components/providers/session-provider';
-import { isEducationEditor, isPlatformAdmin, roleBadgeLabel, roleVariant } from '@/lib/roles';
+import { hasEducationRole, hasForumRole, isEducationEditor, isOrgAdmin, isPlatformAdmin, roleBadgeLabelForVariant, variantForMode } from '@/lib/roles';
 import { serverEnv } from '@/env';
 import AdminSidebar from '../admin/_components/AdminSidebar';
 import AdminTopbar from '../admin/_components/AdminTopbar';
@@ -12,8 +12,13 @@ export default async function EditorLayout({ children }: { children: React.React
   if (!session) redirect('/auth/login');
 
   const authorities = session.user.permissions ?? session.user.roles;
-  // L'éditeur accède à cet espace ; l'admin (superset) est toléré.
-  if (!isEducationEditor(authorities) && !isPlatformAdmin(authorities)) redirect('/');
+  // Le mode organisation est porté par un marqueur de session explicite (login org), PAS déduit des
+  // rôles — un freelance possède aussi les rôles MANAGER et ne doit pas être traité comme admin d'org.
+  const orgMode = session.workspace?.orgMode === true;
+  // Accès à l'espace éditeur : éditeur, admin plateforme, ou admin d'org (uniquement en mode org).
+  if (!isEducationEditor(authorities) && !isPlatformAdmin(authorities) && !(orgMode && isOrgAdmin(authorities))) redirect('/');
+
+  const variant = variantForMode(authorities, orgMode);
 
   const clientSession: ClientSession = {
     user: session.user,
@@ -28,12 +33,12 @@ export default async function EditorLayout({ children }: { children: React.React
   return (
     <SessionProvider initialSession={clientSession}>
       <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--gray-50)', overflow: 'hidden' }}>
-        <AdminSidebar displayName={displayName} email={session.user.email} variant={roleVariant(authorities)} roleBadge={roleBadgeLabel(authorities)} />
+        <AdminSidebar displayName={displayName} email={session.user.email} variant={variant} roleBadge={roleBadgeLabelForVariant(variant)} orgMode={orgMode} hasEducation={hasEducationRole(authorities)} hasForum={hasForumRole(authorities)} />
         <div
           style={{ marginLeft: 'var(--sb-w, 260px)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', overflowY: 'auto', transition: 'margin-left .3s ease' }}
           className="admin-main"
         >
-          <AdminTopbar displayName={displayName} variant={roleVariant(authorities)} mockMode={serverEnv.MOCK_MODE} />
+          <AdminTopbar displayName={displayName} variant={variant} mockMode={serverEnv.MOCK_MODE} />
           <main style={{ flex: 1, padding: '28px 32px' }}>{children}</main>
         </div>
       </div>

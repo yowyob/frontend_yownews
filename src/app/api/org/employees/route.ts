@@ -4,11 +4,9 @@ import { fail, ok } from '@/server/api-response';
 import { authenticatedRoute } from '@/server/handlers';
 import { listEmployees, inviteEmployee } from '@/server/ksm/modules/employees';
 import { findRoleIdByCode } from '@/server/ksm/modules/administration';
-import { getAdminSession } from '@/server/ksm/admin-session';
+import { orgOperationSession } from '@/server/ksm/admin-session';
 import { isOrganizationManager } from '@/lib/roles';
-
-/** Rôles "employé" assignables par un owner d'organisation à l'invitation. */
-const INVITABLE_ROLE_CODES = ['EDUCATION_EDITOR_PERMISSIONS', 'NEWSLETTER_EDITOR', 'FORUM_USER_PERMISSIONS'];
+import { isRoleAssignable } from '@/lib/org-roles';
 
 export async function GET() {
   return authenticatedRoute(async (session) => {
@@ -18,7 +16,7 @@ export async function GET() {
       return fail(400, 'NO_ORGANIZATION', "Aucune organisation active sélectionnée.");
     }
 
-    const adminSession = await getAdminSession();
+    const adminSession = await orgOperationSession(session);
     if (!adminSession) return fail(500, 'ADMIN_SESSION_FAILED', 'No admin session');
 
     const employees = await listEmployees(adminSession, orgId);
@@ -44,11 +42,12 @@ export async function POST(request: NextRequest) {
     const roleCode = String(body.roleCode ?? '').trim();
 
     if (!email) return fail(400, 'VALIDATION_ERROR', "L'adresse email est requise.");
-    if (!INVITABLE_ROLE_CODES.includes(roleCode)) {
-      return fail(400, 'VALIDATION_ERROR', 'roleCode invalide.');
+    // Rôle unique, borné par les services souscrits de l'org (module du rôle ∈ services).
+    if (!isRoleAssignable(roleCode, session.workspace?.services)) {
+      return fail(400, 'VALIDATION_ERROR', "Ce rôle n'est pas attribuable pour cette organisation (service non souscrit).");
     }
 
-    const adminSession = await getAdminSession();
+    const adminSession = await orgOperationSession(session);
     if (!adminSession) return fail(500, 'ADMIN_SESSION_FAILED', 'No admin session');
 
     const roleId = await findRoleIdByCode(adminSession, orgId, roleCode);

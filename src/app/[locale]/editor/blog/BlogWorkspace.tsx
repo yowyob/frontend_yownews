@@ -58,6 +58,8 @@ function CreateBlogTab({ editing, onDone }: { editing: BlogDetail | null; onDone
     method: editing ? 'PUT' : 'POST',
     coverPath: (id) => `/api/education/blogs/${id}/cover`,
     twoStep: true,
+    // Alimente l'aperçu live avec le HTML sérialisé de l'éditeur par blocs (mis à jour à chaque frappe).
+    liveBodyHtml: contenu,
     extraFields: (
       <BlockEditor key={remountKey} value={contenu} onChange={setContenu} mode="education" uploadEndpoint="/api/education/media" />
     ),

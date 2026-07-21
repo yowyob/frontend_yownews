@@ -33,8 +33,14 @@ export type OrgSubscriptionCheck =
  * légitime ici (lecture seule, aucun état sensible propagé). Réutilisé par
  * `activateOrganizationWorkspace` (login) et par le switch d'org en session (`/api/org/switch`).
  */
-export async function checkOrgSubscription(organizationId: string): Promise<OrgSubscriptionCheck> {
-  const adminSession = await getAdminSession();
+export async function checkOrgSubscription(
+  organizationId: string,
+  callerSession?: AppSession,
+): Promise<OrgSubscriptionCheck> {
+  // En tenant dédié, l'org n'est PAS visible par l'admin plateforme (autre tenant) : on lit alors
+  // via la session de l'appelant (owner = admin de son tenant). L'admin plateforme reste le repli
+  // pour les contextes plateforme (ex. souscription initiale d'une org du tenant plateforme).
+  const adminSession = callerSession ?? (await getAdminSession());
   if (!adminSession) {
     logger.error({ organizationId }, 'ksm.org_activation.admin_session_unavailable');
     return { subscribed: false, effectiveServices: [] };
@@ -92,7 +98,13 @@ export async function activateOrganizationWorkspace(
   ownerSession: AppSession,
   org: OrgLoginOrganization,
 ): Promise<ActivateOrgResult> {
-  const check = await checkOrgSubscription(org.organizationId);
+  // Services de l'org fournis par discover-contexts (dans le tenant de l'utilisateur) — source
+  // primaire, pour NE PAS lire via l'admin plateforme (impossible si l'org est dans un tenant dédié).
+  // Repli si absents : lecture via la session de l'utilisateur (owner = admin de son tenant).
+  const fromDiscovery = org.services ?? [];
+  const check: OrgSubscriptionCheck = fromDiscovery.length > 0
+    ? { subscribed: ORG_MODE_REQUIRED_SERVICES.some((c) => fromDiscovery.includes(c)), effectiveServices: fromDiscovery }
+    : await checkOrgSubscription(org.organizationId, ownerSession);
   if (!check.subscribed) {
     return { subscribed: false, effectiveServices: check.effectiveServices };
   }
@@ -105,6 +117,10 @@ export async function activateOrganizationWorkspace(
       organizationId: org.organizationId,
       organizationCode: org.code,
       organizationName: org.displayName,
+      // Login organisation explicite → marque la session en mode organisation.
+      orgMode: true,
+      // Services souscrits de l'org (bornent les rôles attribuables aux employés).
+      services: check.effectiveServices,
     },
   };
   await writeSession(session);

@@ -27,7 +27,12 @@ export async function POST(request: NextRequest) {
       return fail(403, 'ORG_NOT_ALLOWED', "Vous n'avez pas accès à cette organisation.");
     }
 
-    const check = await checkOrgSubscription(org.organizationId);
+    // Services connus depuis le login (discover-contexts) : source primaire, pour ne pas relire via
+    // l'admin plateforme (impossible si l'org est dans un tenant dédié). Repli : session de l'appelant.
+    const knownServices = org.services ?? [];
+    const check = knownServices.length > 0
+      ? { subscribed: ORG_MODE_REQUIRED_SERVICES.some((c) => knownServices.includes(c)), effectiveServices: knownServices }
+      : await checkOrgSubscription(org.organizationId, session);
     if (!check.subscribed) {
       return ok({
         requiresSubscription: true as const,
@@ -37,12 +42,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Conserve le marqueur de mode (le switch d'org se fait en restant dans le même mode) et
+    // met à jour les services souscrits de la nouvelle org.
+    const orgMode = session.workspace?.orgMode;
+    const services = check.effectiveServices;
     await patchSession({
       workspace: {
         tenantId: session.workspace?.tenantId ?? session.user.tenantId ?? '',
         organizationId: org.organizationId,
         organizationCode: org.code,
         organizationName: org.displayName,
+        orgMode,
+        services,
       },
     });
 
@@ -52,6 +63,8 @@ export async function POST(request: NextRequest) {
         organizationId: org.organizationId,
         organizationCode: org.code,
         organizationName: org.displayName,
+        orgMode,
+        services,
       },
     });
   });

@@ -348,7 +348,12 @@ export async function uploadEditorMedia(session: AppSession, formData: FormData)
     { method: 'POST', body: formData, raw: true },
     { session },
   );
-  return readRaw<EditorMediaUpload>(res);
+  const out = await readRaw<EditorMediaUpload>(res);
+  // KSM renvoie son propre chemin public (`/api/public/education/media/{id}`), mais côté navigateur
+  // c'est le proxy BFF `/api/education/media/{id}` (route [fileId] ci-contre) qui streame l'octet.
+  // On réécrit donc l'URL vers cette route pour que le `<img src>` résolve bien sur l'origine du
+  // frontend. Le regex KSM `MEDIA_REF` (`/media/{uuid}`) matche toujours → stamping content_id intact.
+  return { ...out, url: `/api/education/media/${out.id}` };
 }
 
 /** Flux binaire d'une image de corps. L'endpoint KSM est **public** (`/api/public/**` est

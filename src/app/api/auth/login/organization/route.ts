@@ -5,6 +5,7 @@ import * as authApi from '@/server/ksm/modules/auth';
 import { orgDisplayName } from '@/server/login-pending';
 import { activateOrganizationWorkspace, ORG_MODE_REQUIRED_SERVICES } from '@/server/ksm/org-activation';
 import { saveOrgLoginPending, type OrgLoginOrganization } from '@/server/org-login-pending';
+import { getAdminSession } from '@/server/ksm/admin-session';
 import type { AppSession } from '@/lib/types/auth';
 
 /**
@@ -35,6 +36,16 @@ export async function POST(request: NextRequest) {
     const ctx = discovery.contexts[0];
     const contextual = await authApi.selectContext(discovery.selectionToken, ctx.contextId, undefined);
     const s = contextual.session;
+
+    // Le mode organisation est réservé aux comptes d'un tenant DÉDIÉ à une organisation. Un compte du
+    // tenant de la plateforme (admin .env.local, freelances, lecteurs) n'a rien à y faire : sinon le
+    // contenu de la plateforme fuiterait dans l'espace org (isolation stricte par tenant). On rejette
+    // donc tout login org dont le tenant est celui de l'admin plateforme.
+    const adminSession = await getAdminSession();
+    const platformTenantId = adminSession?.user.tenantId ?? adminSession?.workspace?.tenantId;
+    if (platformTenantId && contextual.selectedTenantId === platformTenantId) {
+      return fail(403, 'ORG_MODE_NOT_ALLOWED', "Le mode organisation n'est pas disponible pour les comptes de la plateforme. Connectez-vous avec un compte d'organisation dédié (tenant propre).");
+    }
     const ownerSession: AppSession = {
       sid: crypto.randomUUID(),
       accessToken: s.accessToken,
@@ -62,6 +73,7 @@ export async function POST(request: NextRequest) {
     const organizations: OrgLoginOrganization[] = ctx.organizations.map((o) => ({
       organizationId: o.organizationId,
       code: o.organizationCode ?? o.organizationId,
+      services: o.services ?? [],
       displayName: orgDisplayName(o),
     }));
     // Propagé à la session finale (activateOrganizationWorkspace spreads ownerSession) — sert au

@@ -168,7 +168,9 @@ export default function LoginPage() {
 
   async function finishOrgMode() {
     await refresh();
-    router.push('/');
+    // Mode organisation → dashboard de l'espace org (et non le landing public, qui ne redirige pas
+    // un connecté et laissait l'utilisateur sans navigation d'application).
+    router.push('/editor/dashboard');
   }
 
   async function handleOrgModeResult(res: OrgLoginResult) {

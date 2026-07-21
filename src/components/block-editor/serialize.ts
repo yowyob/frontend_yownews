@@ -14,8 +14,16 @@ const C = { primary: '#1F5FBF', accent: '#FF6B35', blueLight: '#EBF3FF', line: '
 
 // Styles inline par bloc → le HTML stocké est AUTO-STYLÉ : rend pareil dans l'éditeur, sur les pages
 // de lecture, et dans l'email (qui supprime les <style>). Les classes sont conservées en parallèle.
+// Tailles/graisses par niveau : mêmes valeurs que HEADING_STYLE de l'éditeur, pour que la page
+// publiée et l'email restituent la hiérarchie choisie (indispensable face au reset des <h> en CSS).
+const HEADING: Record<1 | 2 | 3, string> = {
+  1: 'font-size:30px;font-weight:800;line-height:1.2',
+  2: 'font-size:24px;font-weight:700;line-height:1.25',
+  3: 'font-size:19px;font-weight:700;line-height:1.3',
+};
+
 const S = {
-  heading: `margin:18px 0 8px;color:${C.dark};line-height:1.25`,
+  heading: `margin:18px 0 8px;color:${C.dark}`,
   paragraph: `margin:0 0 16px;line-height:1.7;color:${C.body}`,
   quote: `border-left:3px solid ${C.accent};padding-left:14px;margin:16px 0;font-style:italic;color:${C.muted}`,
   callout: `background:${C.blueLight};border-left:3px solid ${C.primary};padding:14px 18px;border-radius:10px;margin:18px 0`,
@@ -30,7 +38,7 @@ const S = {
 export function serializeBlock(b: Block): string {
   switch (b.type) {
     case 'heading':
-      return `<h${b.level} style="${S.heading}">${b.html}</h${b.level}>`;
+      return `<h${b.level} style="${S.heading};${HEADING[b.level]}">${b.html}</h${b.level}>`;
     case 'paragraph':
       return `<p style="${S.paragraph}">${b.html}</p>`;
     case 'quote':

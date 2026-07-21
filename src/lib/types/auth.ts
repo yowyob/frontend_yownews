@@ -15,6 +15,13 @@ export interface WorkspaceContext {
   organizationCode?: string;
   organizationName?: string;
   agencyId?: string;
+  // Marqueur explicite du « mode organisation » : posé au login organisation
+  // (activateOrganizationWorkspace) et conservé au switch d'org. Absent = mode freelance/normal.
+  // Source de vérité du mode pour l'UI (badge, nav, profil) — NE PAS déduire des rôles.
+  orgMode?: boolean;
+  // Services souscrits par l'organisation active (EDUCATION, FORUM, …). Bornent les rôles que
+  // l'owner peut attribuer à ses employés. L'affichage des onglets, lui, dépend des RÔLES de l'user.
+  services?: string[];
 }
 
 /** Organisation que l'utilisateur peut activer (owner ou simple employé) — cf. discover-contexts,
@@ -23,6 +30,8 @@ export interface AccessibleOrganization {
   organizationId: string;
   code: string;
   displayName: string;
+  // Services souscrits (depuis discover-contexts) — sert au switch d'org sans relire via l'admin.
+  services?: string[];
 }
 
 export interface AppSession {

@@ -76,6 +76,9 @@ export function buildSession(contextual: ContextualLoginResponse): AppSession {
       organizationId: o.organizationId,
       code: o.organizationCode ?? o.organizationId,
       displayName: orgDisplayName(o),
+      // Services souscrits (fournis par KSM dans le tenant de l'utilisateur) : évitent de relire les
+      // services via l'admin plateforme lors d'un switch d'org (impossible en tenant dédié).
+      services: o.services ?? [],
     })),
   };
 }

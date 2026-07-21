@@ -29,7 +29,9 @@ export async function POST(request: NextRequest) {
     }
 
     await subscribeService(session, organizationId, serviceCode);
-    const check = await checkOrgSubscription(organizationId);
+    // Relecture via la session de l'appelant (l'org peut être dans un tenant dédié, invisible de
+    // l'admin plateforme).
+    const check = await checkOrgSubscription(organizationId, session);
 
     return ok({ subscribed: check.subscribed, effectiveServices: check.effectiveServices });
   });

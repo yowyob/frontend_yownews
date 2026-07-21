@@ -13,6 +13,9 @@ export type OrgLoginOrganization = {
   organizationId: string;
   code: string;
   displayName: string;
+  // Services souscrits de l'org, fournis par discover-contexts (dans le tenant de l'utilisateur).
+  // Évite de relire les services via l'admin plateforme (impossible si l'org est dans un autre tenant).
+  services?: string[];
 };
 
 export type PendingOrgLogin = {

@@ -41,7 +41,6 @@ const PALETTE: Record<EditorMode, PaletteDef[]> = {
     { type: 'quote', label: 'Citation', tag: 'QT' },
     { type: 'callout', label: 'Encadré', tag: 'BOX' },
     { type: 'image', label: 'Image', tag: 'IMG' },
-    { type: 'button', label: 'Bouton', tag: 'CTA' },
     { type: 'divider', label: 'Séparateur', tag: 'HR' },
   ],
   newsletter: [
@@ -51,7 +50,6 @@ const PALETTE: Record<EditorMode, PaletteDef[]> = {
     { type: 'quote', label: 'Citation', tag: 'QT' },
     { type: 'callout', label: 'Encadré', tag: 'BOX' },
     { type: 'image', label: 'Image', tag: 'IMG', max: 1 },
-    { type: 'button', label: 'Bouton', tag: 'CTA' },
     { type: 'file', label: 'Fichier', tag: 'PJ', max: 1 },
     { type: 'divider', label: 'Séparateur', tag: 'HR' },
   ],
@@ -77,6 +75,7 @@ function Editable({
   onChange,
   onFocus,
   style,
+  editRef,
 }: {
   tag: string;
   initialHtml: string;
@@ -84,8 +83,11 @@ function Editable({
   onChange: (html: string) => void;
   onFocus?: () => void;
   style?: React.CSSProperties;
+  // Ref transmise par le parent pour que la barre de formatage puisse lire/écrire l'innerHTML.
+  editRef?: React.RefObject<HTMLElement | null>;
 }) {
-  const ref = useRef<HTMLElement>(null);
+  const internal = useRef<HTMLElement>(null);
+  const ref = editRef ?? internal;
   useEffect(() => {
     if (ref.current && ref.current.innerHTML !== initialHtml) ref.current.innerHTML = initialHtml;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,9 +103,28 @@ function Editable({
   });
 }
 
-function fmt(cmd: string) {
-  document.execCommand(cmd, false);
+// Barre de formatage inline — définie au niveau module (identité stable) pour ne pas se remonter à
+// chaque rendu du bloc, ce qui perturbait la sélection au moment du clic.
+function InlineToolbar({ onCmd }: { onCmd: (cmd: string) => void }) {
+  const btn = (cmd: string, label: React.ReactNode) => (
+    <button type="button" onMouseDown={(e) => { e.preventDefault(); onCmd(cmd); }}>{label}</button>
+  );
+  return (
+    <div className="be-inline-tb">
+      {btn('bold', <b>B</b>)}
+      {btn('italic', <i>I</i>)}
+      {btn('underline', <u>U</u>)}
+    </div>
+  );
 }
+
+// Tailles/graisses explicites par niveau : le Preflight de Tailwind aplatit h1/h2/h3, il faut donc
+// les fixer en inline (mêmes valeurs que la sérialisation, pour que l'éditeur = la page publiée).
+const HEADING_STYLE: Record<1 | 2 | 3, React.CSSProperties> = {
+  1: { fontSize: 30, fontWeight: 800, lineHeight: 1.2 },
+  2: { fontSize: 24, fontWeight: 700, lineHeight: 1.25 },
+  3: { fontSize: 19, fontWeight: 700, lineHeight: 1.3 },
+};
 
 function BlockBody({
   block,
@@ -117,15 +138,16 @@ function BlockBody({
   onActivate: () => void;
 }) {
   const textStyle: React.CSSProperties = { outline: 'none', width: '100%' };
+  const editRef = useRef<HTMLElement>(null);
 
-  const Toolbar = () =>
-    active ? (
-      <div className="be-inline-tb">
-        <button type="button" onMouseDown={(e) => { e.preventDefault(); fmt('bold'); }}><b>B</b></button>
-        <button type="button" onMouseDown={(e) => { e.preventDefault(); fmt('italic'); }}><i>I</i></button>
-        <button type="button" onMouseDown={(e) => { e.preventDefault(); fmt('underline'); }}><u>U</u></button>
-      </div>
-    ) : null;
+  // Applique le formatage à la sélection courante PUIS resynchronise block.html depuis le DOM :
+  // execCommand ne déclenche pas toujours onInput de façon fiable. styleWithCSS=false → <b>/<i>/<u>.
+  const runCmd = (cmd: string) => {
+    try { document.execCommand('styleWithCSS', false, 'false'); } catch { /* noop */ }
+    document.execCommand(cmd, false);
+    if (editRef.current) onChange({ html: editRef.current.innerHTML } as Partial<Block>);
+  };
+  const toolbar = active ? <InlineToolbar onCmd={runCmd} /> : null;
 
   switch (block.type) {
     case 'heading':
@@ -137,30 +159,30 @@ function BlockBody({
                 Niv. {l}
               </button>
             ))}
-            <Toolbar />
+            {toolbar}
           </div>
-          <Editable tag={`h${block.level}`} initialHtml={block.html} placeholder="Titre…" onChange={(html) => onChange({ html })} onFocus={onActivate} style={{ ...textStyle, margin: 0, fontFamily: 'var(--font-d)', color: 'var(--dark)' }} />
+          <Editable editRef={editRef} tag={`h${block.level}`} initialHtml={block.html} placeholder="Titre…" onChange={(html) => onChange({ html })} onFocus={onActivate} style={{ ...textStyle, margin: 0, fontFamily: 'var(--font-d)', color: 'var(--dark)', ...HEADING_STYLE[block.level] }} />
         </div>
       );
     case 'paragraph':
       return (
         <div>
-          <Toolbar />
-          <Editable tag="p" initialHtml={block.html} placeholder="Écrivez un paragraphe…" onChange={(html) => onChange({ html })} onFocus={onActivate} style={{ ...textStyle, margin: 0, lineHeight: 1.7, color: 'var(--gray-700, #374151)' }} />
+          {toolbar}
+          <Editable editRef={editRef} tag="p" initialHtml={block.html} placeholder="Écrivez un paragraphe…" onChange={(html) => onChange({ html })} onFocus={onActivate} style={{ ...textStyle, margin: 0, lineHeight: 1.7, color: 'var(--gray-700, #374151)' }} />
         </div>
       );
     case 'quote':
       return (
         <div>
-          <Toolbar />
-          <Editable tag="blockquote" initialHtml={block.html} placeholder="Citation…" onChange={(html) => onChange({ html })} onFocus={onActivate} style={{ ...textStyle, margin: 0, borderLeft: '3px solid var(--accent)', paddingLeft: 14, fontStyle: 'italic', color: 'var(--gray-600)' }} />
+          {toolbar}
+          <Editable editRef={editRef} tag="blockquote" initialHtml={block.html} placeholder="Citation…" onChange={(html) => onChange({ html })} onFocus={onActivate} style={{ ...textStyle, margin: 0, borderLeft: '3px solid var(--accent)', paddingLeft: 14, fontStyle: 'italic', color: 'var(--gray-600)' }} />
         </div>
       );
     case 'callout':
       return (
         <div>
-          <Toolbar />
-          <Editable tag="div" initialHtml={block.html} placeholder="Encadré…" onChange={(html) => onChange({ html })} onFocus={onActivate} style={{ ...textStyle, background: 'var(--blue-light)', borderLeft: '3px solid var(--primary)', padding: '14px 18px', borderRadius: 10 }} />
+          {toolbar}
+          <Editable editRef={editRef} tag="div" initialHtml={block.html} placeholder="Encadré…" onChange={(html) => onChange({ html })} onFocus={onActivate} style={{ ...textStyle, background: 'var(--blue-light)', borderLeft: '3px solid var(--primary)', padding: '14px 18px', borderRadius: 10 }} />
         </div>
       );
     case 'list':
@@ -169,9 +191,9 @@ function BlockBody({
           <div className="be-level-row">
             <button type="button" className={`be-level ${!block.ordered ? 'active' : ''}`} onClick={() => onChange({ ordered: false })}>• Puces</button>
             <button type="button" className={`be-level ${block.ordered ? 'active' : ''}`} onClick={() => onChange({ ordered: true })}>1. Numéros</button>
-            <Toolbar />
+            {toolbar}
           </div>
-          <Editable tag={block.ordered ? 'ol' : 'ul'} initialHtml={block.html} placeholder="Élément…" onChange={(html) => onChange({ html })} onFocus={onActivate} style={{ ...textStyle, margin: 0, paddingLeft: 22, color: 'var(--gray-700, #374151)' }} />
+          <Editable editRef={editRef} tag={block.ordered ? 'ol' : 'ul'} initialHtml={block.html} placeholder="Élément…" onChange={(html) => onChange({ html })} onFocus={onActivate} style={{ ...textStyle, margin: 0, paddingLeft: 22, color: 'var(--gray-700, #374151)' }} />
         </div>
       );
     case 'image':

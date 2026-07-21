@@ -469,19 +469,19 @@ export default function ContentEditor(
       </div>
     </div>
 
-    {!twoStep && (
-      <div className="content-editor-preview" style={{ width: '100%', maxWidth: '520px', position: 'sticky', top: '16px' }}>
-        <LivePreview
-          typeLabel={config.noun}
-          title={title}
-          description={description}
-          tags={previewTags}
-          coverSrc={coverPreview}
-          bodyHtml={config.richEditor ? liveBodyHtml : undefined}
-          extra={config.previewExtra}
-        />
-      </div>
-    )}
+    {/* Aperçu live — affiché aussi en 2 étapes : le corps provient alors de `config.liveBodyHtml`
+        (HTML sérialisé de l'éditeur par blocs) plutôt que d'un éditeur TipTap. */}
+    <div className="content-editor-preview" style={{ width: '100%', maxWidth: '520px', position: 'sticky', top: '16px' }}>
+      <LivePreview
+        typeLabel={config.noun}
+        title={title}
+        description={description}
+        tags={previewTags}
+        coverSrc={coverPreview}
+        bodyHtml={config.liveBodyHtml ?? (config.richEditor ? liveBodyHtml : undefined)}
+        extra={config.previewExtra}
+      />
+    </div>
 
     <style>{`
       @media(max-width: 1200px) {
