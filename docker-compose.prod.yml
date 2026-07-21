@@ -5,14 +5,24 @@ services:
     pull_policy: always
     restart: unless-stopped
     environment:
-      NODE_ENV: "production"
-      PORT: "3000"
-      KSM_BASE_URL: "https://kernel-core.yowyob.com"
-      KSM_CLIENT_ID: "yownews-frontend"
+      HOSTNAME: "${HOSTNAME:-0.0.0.0}"
+      KSM_BASE_URL: "${KSM_BASE_URL:?}"
+      KSM_CLIENT_ID: "${KSM_CLIENT_ID:?}"
       KSM_API_KEY: "${KSM_API_KEY:?}"
+      NEXT_TELEMETRY_DISABLED: "${NEXT_TELEMETRY_DISABLED:-1}"
+      NODE_ENV: "${NODE_ENV:-production}"
+      PORT: "${PORT:-3000}"
+      MOCK_MODE: "${MOCK_MODE:-false}"
+      KSM_PLATFORM_ORG_CODE: "${KSM_PLATFORM_ORG_CODE:?}"
+      NEXT_PUBLIC_KSM_PLATFORM_ORG_CODE: "${NEXT_PUBLIC_KSM_PLATFORM_ORG_CODE:?}"
       SESSION_SECRET: "${SESSION_SECRET:?}"
-      REDIS_HOST: "yownews-redis"
-      REDIS_PORT: "6379"
+      SESSION_COOKIE_NAME: "${SESSION_COOKIE_NAME:-yowyob_edu_session}"
+      SESSION_TTL_SECONDS: "${SESSION_TTL_SECONDS:-3600}"
+      KSM_PLATFORM_ADMIN_EMAIL: "${KSM_PLATFORM_ADMIN_EMAIL:?}"
+      KSM_PLATFORM_ADMIN_PASSWORD: "${KSM_PLATFORM_ADMIN_PASSWORD:?}"
+      REDIS_HOST: "${REDIS_HOST:-yownews-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
     healthcheck:
       test: ["CMD-SHELL","wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 1"]
       interval: 20s
