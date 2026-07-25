@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link } from '@/i18n/navigation';
 import { apiFetch, BffApiError } from '@/lib/api-client';
+import { useSessionUser } from '@/components/providers/session-provider';
+import UserAvatar from '@/components/ui/UserAvatar';
 import BlogPreviewModal, { type BlogPreviewData } from '@/components/education/BlogPreviewModal';
 
 type Application = {
@@ -29,10 +31,6 @@ type FollowCounts = { followers: number; following: number };
 // `orgMode` : en mode organisation, on ne propose jamais « Devenir Rédacteur » (l'utilisateur est
 // owner/employé d'une org, pas un lecteur candidat) — on affiche directement la vue posts.
 type Props = { displayName: string; email: string; view: 'editor' | 'reader'; roleLabel: string; blogHref?: string; orgMode?: boolean };
-
-function initials(name: string) {
-  return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
-}
 
 const STATUS_BADGE: Record<string, { label: string; bg: string; color: string }> = {
   PUBLISHED: { label: 'Publié', bg: 'rgba(34,197,94,.1)', color: '#16A34A' },
@@ -88,6 +86,7 @@ function Dropdown({ label, active, disabled, children }: { label: string; active
 }
 
 export default function ProfileClient({ displayName, email, view, roleLabel, blogHref = '/editor/blog', orgMode = false }: Props) {
+  const sessionUser = useSessionUser();
   // En mode org, on force la vue « éditeur » (posts) : pas de bannière « Devenir Rédacteur ».
   const isEditor = view === 'editor' || orgMode;
   const [application, setApplication] = useState<Application | null>(null);
@@ -194,9 +193,7 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
       {/* En-tête profil */}
       <div style={{ ...card, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: 22, flexShrink: 0 }}>
-            {initials(displayName)}
-          </div>
+          <UserAvatar name={displayName} userId={sessionUser?.id} size={64} fontSize={22} />
           <div style={{ minWidth: 0 }}>
             <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--primary)', margin: 0 }}>{displayName}</h1>
             <div style={{ color: 'var(--gray-500)', fontSize: 14 }}>{email}</div>

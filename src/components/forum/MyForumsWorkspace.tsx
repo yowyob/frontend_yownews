@@ -5,12 +5,13 @@ import { AppLink, useAppRouter } from '@/components/ui/app-link';
 import RowMenu, { type MenuItem } from '@/components/education/RowMenu';
 
 type ForumStatus = 'PENDING' | 'VALIDATED' | 'REJECTED';
-type GroupType = 'FORUM' | 'COMMUNITY' | 'PUBLIC';
+type GroupType = 'FORUM' | 'COMMUNITY';
 type DiscussionGroup = {
   groupId: string; name: string; description?: string | null;
   type: GroupType; status: ForumStatus;
   creatorId?: string | null; creatorName?: string | null;
   members?: string[] | null;
+  parentCommunityId?: string | null;
   createdAt?: string | null; updatedAt?: string | null;
 };
 
@@ -24,7 +25,7 @@ const STATUS_TABS: { key: StatusTab; label: string }[] = [
 
 const STATUS_LABEL: Record<ForumStatus, string> = { PENDING: 'En attente', VALIDATED: 'Validé', REJECTED: 'Rejeté' };
 const STATUS_COLOR: Record<ForumStatus, string> = { PENDING: '#F59E0B', VALIDATED: '#16A34A', REJECTED: '#DC2626' };
-const TYPE_LABELS: Record<GroupType, string> = { FORUM: 'Forum', COMMUNITY: 'Communauté', PUBLIC: 'Forum public' };
+const TYPE_LABELS: Record<GroupType, string> = { FORUM: 'Forum', COMMUNITY: 'Communauté' };
 
 function formatDate(s?: string | null) {
   if (!s) return '—';
@@ -40,11 +41,19 @@ function StatusBadge({ status }: { status: ForumStatus }) {
   );
 }
 
-// ── Panneau « Forums de la communauté » ──
-// Les forums validés sont accessibles à TOUS les utilisateurs du tenant : `/api/forum/groups` →
-// KSM `/groups/public` (status=VALIDATED, filtré tenant, sans filtre par créateur). Sans ce
-// panneau, l'admin et le rédacteur ne voyaient que leurs propres forums (`/groups/mine`).
-function CommunityForums() {
+// Un groupe correspond-il au mode courant ?
+function matchesMode(type: GroupType, mode: 'FORUM' | 'COMMUNITY') {
+  return mode === 'COMMUNITY' ? type === 'COMMUNITY' : type === 'FORUM';
+}
+
+// ── Panneau latéral « Forums de la communauté » / « Communautés populaires » ──
+// Les espaces validés sont accessibles à TOUS les utilisateurs du tenant : `/api/forum/groups` →
+// KSM `/groups/public` (status=VALIDATED, filtré tenant, sans filtre par créateur). On n'affiche
+// ici que les espaces du mode courant dont l'utilisateur ne fait PAS déjà partie (excludeIds =
+// ses espaces créés + rejoints), limités aux plus récents ; le catalogue complet est accessible
+// via le bouton en bas.
+const SIDEBAR_LIMIT = 5;
+function CommunityForums({ mode, excludeIds }: { mode: 'FORUM' | 'COMMUNITY'; excludeIds: Set<string> }) {
   const [groups, setGroups] = useState<DiscussionGroup[] | null>(null);
 
   useEffect(() => {
@@ -53,32 +62,40 @@ function CommunityForums() {
       .catch(() => setGroups([]));
   }, []);
 
-  // Les plus récents en premier ; une date absente passe en fin de liste.
-  const sorted = [...(groups ?? [])].sort(
-    (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
-  );
+  // Filtré par mode + hors espaces de l'utilisateur ; les plus récents en premier.
+  const sorted = [...(groups ?? [])]
+    // Les forums enfants d'une communauté ne se découvrent qu'à l'intérieur de leur communauté.
+    .filter((g) => matchesMode(g.type, mode) && !g.parentCommunityId && !excludeIds.has(g.groupId))
+    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
+  const shown = sorted.slice(0, SIDEBAR_LIMIT);
+
+  const heading = mode === 'COMMUNITY' ? 'Communautés populaires' : 'Forums de la communauté';
+  const emptyText = mode === 'COMMUNITY' ? 'Aucune communauté à découvrir pour le moment.' : 'Aucun forum à découvrir pour le moment.';
 
   return (
-    <aside>
-      <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--gray-700)', marginBottom: '4px' }}>
-        Forums de la communauté
+    <aside style={{
+      background: '#fff', border: '1px solid var(--gray-200)', borderRadius: '14px', padding: '18px',
+      alignSelf: 'start',
+    }}>
+      <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--dark)', marginBottom: '4px', fontFamily: 'var(--font-d)' }}>
+        {heading}
       </h3>
-      <p style={{ fontSize: '12px', color: 'var(--gray-400)', margin: '0 0 12px' }}>
-        Tous les forums validés, les plus récents en premier.
+      <p style={{ fontSize: '12px', color: 'var(--gray-400)', margin: '0 0 14px' }}>
+        Tous les espaces validés, les plus récents en premier.
       </p>
 
       {groups === null ? (
         <p style={{ color: 'var(--gray-400)', fontSize: '13px' }}>Chargement…</p>
-      ) : sorted.length === 0 ? (
-        <p style={{ color: 'var(--gray-400)', fontSize: '13px' }}>Aucun forum validé pour le moment.</p>
+      ) : shown.length === 0 ? (
+        <p style={{ color: 'var(--gray-400)', fontSize: '13px' }}>{emptyText}</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {sorted.map((g) => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {shown.map((g) => (
             <AppLink
               key={g.groupId}
               href={`/forums/${g.groupId}`}
               style={{
-                display: 'block', background: '#fff', border: '1px solid var(--gray-200)',
+                display: 'block', background: 'var(--gray-50)', border: '1px solid var(--gray-200)',
                 borderRadius: '10px', padding: '12px 14px', textDecoration: 'none',
                 color: 'inherit', transition: 'box-shadow .15s',
               }}
@@ -87,12 +104,12 @@ function CommunityForums() {
             >
               <div style={{ fontWeight: 700, fontSize: '13.5px', marginBottom: '3px' }}>{g.name}</div>
               {g.description && (
-                <div style={{ fontSize: '12.5px', color: 'var(--gray-500)', lineHeight: 1.45, marginBottom: '6px' }}>
+                <div style={{ fontSize: '12.5px', color: 'var(--gray-500)', lineHeight: 1.45, marginBottom: '8px' }}>
                   {g.description}
                 </div>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--gray-400)', background: 'var(--gray-100)', padding: '2px 6px', borderRadius: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '.03em', color: 'var(--gray-500)', background: 'var(--gray-100)', padding: '3px 8px', borderRadius: '6px', textTransform: 'uppercase' }}>
                   {TYPE_LABELS[g.type] ?? g.type}
                 </span>
                 <span style={{ fontSize: '11px', color: 'var(--gray-400)' }}>{formatDate(g.createdAt)}</span>
@@ -101,23 +118,31 @@ function CommunityForums() {
           ))}
         </div>
       )}
+
+      <AppLink
+        href="/forums/catalogue"
+        style={{
+          display: 'block', textAlign: 'center', marginTop: '14px', padding: '11px 14px',
+          border: '1px dashed var(--gray-300)', borderRadius: '10px', textDecoration: 'none',
+          color: 'var(--gray-600)', fontSize: '13px', fontWeight: 600, transition: 'all .15s',
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gray-300)'; (e.currentTarget as HTMLElement).style.color = 'var(--gray-600)'; }}
+      >
+        Voir tout le catalogue
+      </AppLink>
     </aside>
   );
 }
 
 // ── Formulaire de création / édition inline ──
-const FORUM_TYPE_OPTIONS: { value: GroupType; label: string; hint: string }[] = [
-  { value: 'PUBLIC', label: 'Forum public', hint: 'Ouvert et visible par tous' },
-  { value: 'COMMUNITY', label: 'Communauté', hint: 'Espace communautaire de l’organisation' },
-  { value: 'FORUM', label: 'Forum sur demande', hint: 'Adhésion soumise à validation' },
-];
-
-function ForumForm({ editing, onDone, orgMode = false }: { editing?: DiscussionGroup | null; onDone: () => void; orgMode?: boolean }) {
+function ForumForm({ editing, onDone, initialType }: { editing?: DiscussionGroup | null; onDone: () => void; initialType?: 'FORUM' | 'COMMUNITY' }) {
   const [name, setName] = useState(editing?.name ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
-  // Hors mode organisation : un seul type (PUBLIC). En mode organisation, l'owner choisit le type
-  // (public / communauté / sur demande) — les types réintroduits pour l'espace org.
-  const [type, setType] = useState<GroupType>(editing?.type ?? 'PUBLIC');
+  // Le type est dérivé de l'onglet actif (initialType) à la création, ou du groupe édité — pas de
+  // sélecteur : on est déjà dans la vue « Forums » ou « Communautés ».
+  const type: 'FORUM' | 'COMMUNITY' = editing?.type === 'COMMUNITY' ? 'COMMUNITY' : (initialType ?? 'FORUM');
+  const isCommunity = type === 'COMMUNITY';
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
@@ -144,32 +169,23 @@ function ForumForm({ editing, onDone, orgMode = false }: { editing?: DiscussionG
   return (
     <div style={{ maxWidth: '640px', display: 'flex', flexDirection: 'column', gap: '14px', padding: '18px', border: '1px solid var(--gray-200)', borderRadius: '12px', background: '#fff', marginBottom: '20px' }}>
       <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, fontFamily: 'var(--font-d)' }}>
-        {editing ? 'Modifier le forum' : 'Créer un forum'}
+        {editing
+          ? (type === 'COMMUNITY' ? 'Modifier la communauté' : 'Modifier le forum')
+          : (type === 'COMMUNITY' ? 'Créer une communauté' : 'Créer un forum')}
       </h3>
       {message && (
         <div style={{ padding: '10px 12px', borderRadius: '8px', fontSize: '13px', background: message.kind === 'ok' ? 'rgba(16,185,129,.1)' : '#FEF2F2', color: message.kind === 'ok' ? '#059669' : '#B91C1C' }}>{message.text}</div>
       )}
       <div>
-        <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', display: 'block' }}>Nom du forum *</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom du forum"
+        <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', display: 'block' }}>Nom {isCommunity ? 'de la communauté' : 'du forum'} *</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={isCommunity ? 'Nom de la communauté' : 'Nom du forum'}
           style={{ width: '100%', border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', boxSizing: 'border-box' }} />
       </div>
       <div>
         <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', display: 'block' }}>Description <span style={{ fontWeight: 400, color: 'var(--gray-400)' }}>(facultatif)</span></label>
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="À propos de ce forum…"
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder={isCommunity ? 'À propos de cette communauté…' : 'À propos de ce forum…'}
           style={{ width: '100%', minHeight: '80px', border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
       </div>
-      {orgMode && (
-        <div>
-          <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '6px', display: 'block' }}>Type de forum</label>
-          <select value={type} onChange={(e) => setType(e.target.value as GroupType)}
-            style={{ width: '100%', border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', boxSizing: 'border-box', background: '#fff' }}>
-            {FORUM_TYPE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label} — {o.hint}</option>
-            ))}
-          </select>
-        </div>
-      )}
       {!editing && (
         <p style={{ margin: 0, fontSize: '12px', color: 'var(--gray-400)' }}>
           Votre proposition sera soumise à validation par un administrateur avant d&apos;être publiée.
@@ -185,44 +201,63 @@ function ForumForm({ editing, onDone, orgMode = false }: { editing?: DiscussionG
   );
 }
 
-export default function MyForumsWorkspace({ userId, orgMode = false }: { userId: string; orgMode?: boolean }) {
+// `orgMode` reste accepté (compat appelants) mais n'influe plus sur le choix de type : FORUM et
+// COMMUNITY sont désormais proposés partout.
+export default function MyForumsWorkspace({ userId }: { userId: string; orgMode?: boolean }) {
   const router = useAppRouter();
   const [groups, setGroups] = useState<DiscussionGroup[] | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<DiscussionGroup | null>(null);
   const [statusTab, setStatusTab] = useState<StatusTab>('ALL');
+  // Vue active : forums (FORUM/PUBLIC) ou communautés. Les deux ne se mélangent jamais.
+  const [spaceMode, setSpaceMode] = useState<'FORUM' | 'COMMUNITY'>('FORUM');
+  // Sous-onglet : espaces créés par l'utilisateur ou espaces rejoints (membre non créateur).
+  const [subTab, setSubTab] = useState<'created' | 'joined'>('created');
 
-  const load = useCallback(async () => {
-    try {
-      const data = await apiFetch<DiscussionGroup[]>('/api/forum/groups/mine');
-      setGroups(Array.isArray(data) ? data : []);
-    } catch { setGroups([]); }
+  const load = useCallback(() => {
+    apiFetch<DiscussionGroup[]>('/api/forum/groups/mine')
+      .then((data) => setGroups(Array.isArray(data) ? data : []))
+      .catch(() => setGroups([]));
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const myGroups = (groups ?? []).filter((g) => g.creatorId === userId);
-  const countByStatus = (s: StatusTab) => s === 'ALL' ? myGroups.length : myGroups.filter((g) => g.status === s).length;
-  const filteredMyGroups = statusTab === 'ALL' ? myGroups : myGroups.filter((g) => g.status === statusTab);
+  const isCommunity = spaceMode === 'COMMUNITY';
+  // Les forums enfants d'une communauté se gèrent depuis la communauté, pas dans « Mes forums ».
+  const modeGroups = (groups ?? []).filter((g) => matchesMode(g.type, spaceMode) && !g.parentCommunityId);
+  const created = modeGroups.filter((g) => g.creatorId === userId);
+  const joined = modeGroups.filter((g) => g.creatorId !== userId);
+  const activeList = subTab === 'created' ? created : joined;
+  const countByStatus = (s: StatusTab) => s === 'ALL' ? activeList.length : activeList.filter((g) => g.status === s).length;
+  const filtered = statusTab === 'ALL' ? activeList : activeList.filter((g) => g.status === statusTab);
+  // Tous les espaces de l'utilisateur (créés + rejoints, tous types) : exclus du panneau découverte.
+  const myGroupIds = new Set((groups ?? []).map((g) => g.groupId));
+
+  const title = isCommunity ? 'Mes communautés' : 'Mes forums';
+  const newLabel = isCommunity ? '+ Nouvelle communauté' : '+ Nouveau forum';
+  const createdLabel = isCommunity ? 'Communautés créées' : 'Forums créés';
+  const joinedLabel = isCommunity ? 'Communautés rejointes' : 'Forums rejoints';
+
+  const setMode = (m: 'FORUM' | 'COMMUNITY') => { setSpaceMode(m); setSubTab('created'); setStatusTab('ALL'); };
 
   if (editing) {
     return (
-      <div>
+      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
         <button type="button" onClick={() => setEditing(null)} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: '12px' }}>
-           Mes forums
+          ← {title}
         </button>
-        <ForumForm editing={editing} onDone={() => { setEditing(null); load(); }} orgMode={orgMode} />
+        <ForumForm editing={editing} onDone={() => { setEditing(null); load(); }} />
       </div>
     );
   }
 
   if (showForm) {
     return (
-      <div>
+      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
         <button type="button" onClick={() => setShowForm(false)} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: '12px' }}>
-           Mes forums
+          ← {title}
         </button>
-        <ForumForm onDone={() => { setShowForm(false); load(); }} orgMode={orgMode} />
+        <ForumForm initialType={spaceMode} onDone={() => { setShowForm(false); load(); }} />
       </div>
     );
   }
@@ -230,20 +265,52 @@ export default function MyForumsWorkspace({ userId, orgMode = false }: { userId:
   return (
     <div className="my-forums-grid">
       <div style={{ minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-        <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '20px', fontWeight: 800, margin: 0 }}>Mes forums</h2>
+      {/* En-tête : titre + sous-titre à gauche, bouton de création à droite */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '18px' }}>
+        <div>
+          <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '24px', fontWeight: 800, margin: 0 }}>{title}</h2>
+          <p style={{ fontSize: '13px', color: 'var(--gray-500)', margin: '4px 0 0' }}>Gérez vos espaces de discussion et suivez leur statut.</p>
+        </div>
         <button type="button" onClick={() => setShowForm(true)} style={{
-          border: 'none', borderRadius: '8px', padding: '9px 18px', background: 'var(--accent)',
-          color: '#fff', fontWeight: 700, fontSize: '13.5px', cursor: 'pointer',
-        }}>+ Nouveau forum</button>
+          border: 'none', borderRadius: '8px', padding: '10px 18px', background: 'var(--accent)',
+          color: '#fff', fontWeight: 700, fontSize: '13.5px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+        }}>{newLabel}</button>
+      </div>
+
+      {/* Bascule Forums / Communautés */}
+      <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'var(--gray-100)', borderRadius: '10px', marginBottom: '18px' }}>
+        {([['FORUM', 'Forums'], ['COMMUNITY', 'Communautés']] as const).map(([m, label]) => {
+          const on = spaceMode === m;
+          return (
+            <button key={m} type="button" onClick={() => setMode(m)} style={{
+              border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '13.5px', fontWeight: 700, cursor: 'pointer',
+              background: on ? 'var(--accent)' : 'transparent', color: on ? '#fff' : 'var(--gray-600)', transition: 'all .15s',
+            }}>{label}</button>
+          );
+        })}
       </div>
 
       {groups === null ? (
         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--gray-400)' }}>Chargement…</div>
       ) : (
         <>
-          {/* Mes forums créés */}
-          <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--gray-700)', marginBottom: '10px' }}>Mes forums créés</h3>
+          {/* Sous-onglets créés / rejoints */}
+          <div style={{ display: 'flex', gap: '24px', borderBottom: '1px solid var(--gray-200)', marginBottom: '16px' }}>
+            {([['created', createdLabel, created.length], ['joined', joinedLabel, joined.length]] as const).map(([key, label, count]) => {
+              const on = subTab === key;
+              return (
+                <button key={key} type="button" onClick={() => { setSubTab(key); setStatusTab('ALL'); }} style={{
+                  border: 'none', background: 'none', cursor: 'pointer', padding: '0 0 10px', marginBottom: '-1px',
+                  fontSize: '14px', fontWeight: 700, color: on ? 'var(--dark)' : 'var(--gray-400)',
+                  borderBottom: `2px solid ${on ? 'var(--accent)' : 'transparent'}`,
+                  display: 'flex', alignItems: 'center', gap: '7px',
+                }}>
+                  {label}
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--gray-500)', background: 'var(--gray-100)', padding: '1px 8px', borderRadius: '10px' }}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
 
           {/* Onglets de tri par statut */}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
@@ -260,17 +327,20 @@ export default function MyForumsWorkspace({ userId, orgMode = false }: { userId:
             })}
           </div>
 
-          {myGroups.length === 0 ? (
-            <p style={{ color: 'var(--gray-400)', fontSize: '13px', marginBottom: '24px' }}>Aucun forum créé pour le moment.</p>
-          ) : filteredMyGroups.length === 0 ? (
-            <p style={{ color: 'var(--gray-400)', fontSize: '13px', marginBottom: '24px' }}>Aucun forum dans cette catégorie.</p>
+          {activeList.length === 0 ? (
+            <p style={{ color: 'var(--gray-400)', fontSize: '13px', marginBottom: '24px' }}>
+              {subTab === 'created'
+                ? (isCommunity ? 'Aucune communauté créée pour le moment.' : 'Aucun forum créé pour le moment.')
+                : (isCommunity ? 'Aucune communauté rejointe pour le moment.' : 'Aucun forum rejoint pour le moment.')}
+            </p>
+          ) : filtered.length === 0 ? (
+            <p style={{ color: 'var(--gray-400)', fontSize: '13px', marginBottom: '24px' }}>Aucun espace dans cette catégorie.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
-              {filteredMyGroups.map((g) => {
-                const clickable = g.status === 'VALIDATED';
+              {filtered.map((g) => {
                 const menuItems: MenuItem[] = [];
-                if (clickable) menuItems.push({ label: 'Ouvrir', onClick: () => router.push(`/forums/${g.groupId}`) });
-                menuItems.push({ label: 'Modifier', onClick: () => setEditing(g) });
+                if (g.status === 'VALIDATED') menuItems.push({ label: 'Ouvrir', onClick: () => router.push(`/forums/${g.groupId}`) });
+                if (g.creatorId === userId) menuItems.push({ label: 'Modifier', onClick: () => setEditing(g) });
 
                 return (
                   <div key={g.groupId} style={{
@@ -286,9 +356,11 @@ export default function MyForumsWorkspace({ userId, orgMode = false }: { userId:
                       {g.description && <div style={{ fontSize: '12.5px', color: 'var(--gray-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.description}</div>}
                       <div style={{ fontSize: '11px', color: 'var(--gray-400)', marginTop: '2px' }}>Créé le {formatDate(g.createdAt)}</div>
                     </div>
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <RowMenu items={menuItems} />
-                    </div>
+                    {menuItems.length > 0 && (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <RowMenu items={menuItems} />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -298,7 +370,7 @@ export default function MyForumsWorkspace({ userId, orgMode = false }: { userId:
       )}
       </div>
 
-      <CommunityForums />
+      <CommunityForums mode={spaceMode} excludeIds={myGroupIds} />
 
       <style>{`
         .my-forums-grid {
@@ -307,6 +379,7 @@ export default function MyForumsWorkspace({ userId, orgMode = false }: { userId:
           gap: 28px;
           align-items: start;
           max-width: 1100px;
+          margin: 0 auto;
         }
         @media (max-width: 900px) {
           .my-forums-grid { grid-template-columns: minmax(0, 1fr); }

@@ -36,6 +36,30 @@ export async function takePendingLogin(id: string): Promise<PendingLogin | null>
   }
 }
 
+// ── Pending « Rejoindre Yowyob Education » ────────────────────────────────────
+// Après un login d'un compte non-membre EDU, on ne renvoie qu'un pendingId opaque ; l'email (nécessaire
+// à l'invitation employé) reste côté serveur, borné dans le temps.
+export type PendingJoin = { email: string };
+const joinKey = (id: string) => `app:login:join:${id}`;
+
+export async function saveJoinPending(pending: PendingJoin, ttlSeconds: number): Promise<string> {
+  const id = crypto.randomUUID();
+  const ttl = Math.max(30, Math.min(ttlSeconds, 300));
+  await redis().set(joinKey(id), JSON.stringify(pending), 'EX', ttl);
+  return id;
+}
+
+export async function takeJoinPending(id: string): Promise<PendingJoin | null> {
+  const raw = await redis().get(joinKey(id));
+  if (!raw) return null;
+  await redis().del(joinKey(id));
+  try {
+    return JSON.parse(raw) as PendingJoin;
+  } catch {
+    return null;
+  }
+}
+
 export function orgDisplayName(org: UserOrganizationAccess): string {
   return org.displayName ?? org.shortName ?? org.longName ?? org.legalName ?? org.organizationCode ?? org.organizationId;
 }

@@ -1,11 +1,11 @@
-// CSS de la landing « v5 » (contexte Cameroun) adapté de la maquette landing_v5.html.
+// CSS de la landing « v5 » (landing internationale) adapté de la maquette landing_v5.html.
 // TOUS les sélecteurs sont préfixés par `.lv-root` pour rester confinés à la page d'accueil
 // et ne jamais entrer en collision avec globals.css (utilisé par le reste de l'app).
 
 export const LANDING_CSS = `
 .lv-root{--b50:#eaf2ff;--b400:#4a8fe7;--b500:#2f72d6;--b600:#1f5fbf;--b700:#1a4f9e;--b900:#0f3a7a;
   --lv-orange:#ff6b35;--lv-orange2:#e85a28;--lv-ink:#0f172a;--lv-muted:#64748b;--lv-bg:#fcfbf8;
-  font-family:'Inter',system-ui,sans-serif;color:var(--lv-ink);background:#fff;line-height:1.5}
+  font-family:'Google Sans','Google Sans Text',var(--font-poppins),system-ui,sans-serif;color:var(--lv-ink);background:#fff;line-height:1.5}
 .lv-root *{box-sizing:border-box}
 .lv-root img{max-width:100%;display:block}
 .lv-root a{text-decoration:none;color:inherit}

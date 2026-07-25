@@ -21,7 +21,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = (await request.json()) as { content?: string; commentaireParentId?: string };
     const content = String(body.content ?? '').trim();
     if (!content) return fail(400, 'VALIDATION_ERROR', 'content is required');
-    const authorName = [session.user.firstName, session.user.lastName].filter(Boolean).join(' ') || session.user.email;
+    const authorName = [session.user.firstName, session.user.lastName].filter(Boolean).join(' ') || session.user.username;
     return forumApi.createCommentaire(session, { content, authorId: session.user.id, authorName, postId, commentaireParentId: body.commentaireParentId });
   });
 }

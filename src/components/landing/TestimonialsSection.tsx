@@ -1,21 +1,21 @@
 const TESTIMONIALS = [
   {
     quote:
-      'Grâce aux cours de marketing digital, j’ai lancé ma petite boutique en ligne à Douala. Le contenu est clair et vraiment adapté à notre marché.',
-    name: 'Aïcha Ngono',
-    role: 'Entrepreneure, Douala',
+      'Grâce aux cours de marketing digital, j’ai lancé ma boutique en ligne. Le contenu est clair et vraiment applicable au quotidien.',
+    name: 'Camille Laurent',
+    role: 'Entrepreneure, Lyon',
   },
   {
     quote:
-      'Les podcasts tech m’accompagnent chaque matin dans les embouteillages de Yaoundé. J’apprends énormément, et tout est gratuit.',
-    name: 'Hervé Tchoumi',
-    role: 'Développeur, Yaoundé',
+      'Les podcasts tech m’accompagnent chaque matin dans les transports. J’apprends énormément, et tout est gratuit.',
+    name: 'Julien Moreau',
+    role: 'Développeur, Montréal',
   },
   {
     quote:
-      'Enfin une plateforme qui parle de nos réalités. Les articles sur l’agriculture m’ont beaucoup aidée dans mon exploitation à Bafoussam.',
-    name: 'Marlyse Fotso',
-    role: 'Agricultrice, Bafoussam',
+      'Enfin une plateforme qui rend le savoir accessible à tous. Les articles m’ont beaucoup aidée à faire grandir mon activité.',
+    name: 'Sofia Marchetti',
+    role: 'Consultante, Bruxelles',
   },
 ];
 

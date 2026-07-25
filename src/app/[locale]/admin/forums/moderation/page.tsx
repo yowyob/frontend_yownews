@@ -5,5 +5,5 @@ import ForumModerationWorkspace from './ForumModerationWorkspace';
 export default async function AdminForumsModerationPage() {
   const session = await readSession();
   if (!session) redirect('/auth/login');
-  return <ForumModerationWorkspace />;
+  return <ForumModerationWorkspace kind="forum" />;
 }

@@ -32,7 +32,7 @@ const STATS: { ic: ReactNode; n: string; l: string }[] = [
   { ic: IC.users, n: '15 000+', l: 'personnes accompagnées dans leur formation' },
   { ic: IC.doc, n: '2 400+', l: 'histoires et analyses racontées' },
   { ic: IC.cap, n: '180+', l: 'parcours pour apprendre à votre rythme' },
-  { ic: IC.globe, n: '10 / 10', l: 'régions du Cameroun, une seule communauté' },
+  { ic: IC.globe, n: '150+', l: 'pays réunis, une seule communauté' },
 ];
 
 export function StatsBar() {

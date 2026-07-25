@@ -10,6 +10,9 @@ import { isPlatformAdmin, isEducationEditor } from '@/lib/roles';
 
 type LoginResult = {
   requiresOrgSelection?: boolean;
+  requiresSignUp?: boolean;
+  requiresJoin?: boolean;
+  email?: string;
   pendingId?: string;
   organizations?: { organizationId: string; organizationCode?: string; displayName: string }[];
   user?: { permissions?: string[]; roles: string[] };
@@ -53,13 +56,17 @@ export default function LoginPage() {
   const router = useRouter();
   const { refresh } = useSession();
 
-  const [accountType, setAccountType] = useState<'individual' | 'organization'>('individual');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+
+  // Étape « Rejoindre Yowyob Education » — compte existant mais pas encore membre de l'org EDU.
+  // « Rejoindre » l'invite comme employé (rôle lecteur) puis il se reconnecte.
+  const [joinStep, setJoinStep] = useState<{ pendingId: string; email: string } | null>(null);
+  const [joinState, setJoinState] = useState<'idle' | 'joining' | 'joined' | 'error'>('idle');
 
   // Étape « Choisir votre organisation » — login classique (multi-orgs sur le même compte).
   const [orgStep, setOrgStep] = useState<{ pendingId: string; organizations: NonNullable<LoginResult['organizations']> } | null>(null);
@@ -113,25 +120,29 @@ export default function LoginPage() {
     setGlobalError(null);
     setLoading(true);
     try {
-      if (accountType === 'organization') {
-        const res = await apiFetch<OrgLoginResult>('/api/auth/login/organization', {
-          method: 'POST',
-          body: { email: email.trim().toLowerCase(), password },
-        });
-        await handleOrgModeResult(res);
-        return;
-      }
       const res = await apiFetch<LoginResult>('/api/auth/login', {
         method: 'POST',
         body: { email: email.trim().toLowerCase(), password },
       });
+      // Compte inexistant → page d'inscription (redirige ensuite vers le portail yowauth).
+      if (res.requiresSignUp) {
+        router.push('/auth/sign-up');
+        return;
+      }
+      // Compte existant mais pas encore membre de Yowyob Education → écran « Rejoindre ».
+      if (res.requiresJoin && res.pendingId) {
+        setJoinStep({ pendingId: res.pendingId, email: res.email ?? email.trim().toLowerCase() });
+        return;
+      }
       if (res.requiresOrgSelection && res.pendingId && res.organizations?.length) {
         setOrgStep({ pendingId: res.pendingId, organizations: res.organizations });
         return;
       }
       await finishLogin(res);
     } catch (err) {
-      if (err instanceof BffApiError && err.status === 401) {
+      if (err instanceof BffApiError && err.status === 429) {
+        setGlobalError('Trop de tentatives de connexion. Veuillez réessayer dans une minute.');
+      } else if (err instanceof BffApiError && err.status === 401) {
         setGlobalError('Email ou mot de passe incorrect.');
       } else if (err instanceof BffApiError && err.errorCode === 'NO_ORGANIZATION_ACCESS') {
         setGlobalError("Ce compte n'est ni propriétaire ni employé d'aucune organisation.");
@@ -140,6 +151,17 @@ export default function LoginPage() {
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleJoin() {
+    if (!joinStep || joinState === 'joining') return;
+    setJoinState('joining');
+    try {
+      await apiFetch('/api/auth/login/join', { method: 'POST', body: { pendingId: joinStep.pendingId } });
+      setJoinState('joined');
+    } catch {
+      setJoinState('error');
     }
   }
 
@@ -342,6 +364,68 @@ export default function LoginPage() {
     );
   }
 
+  // Étape « Rejoindre Yowyob Education » — compte existant mais pas encore membre de l'org EDU.
+  // « Rejoindre » l'invite comme employé (rôle lecteur) ; il se reconnecte ensuite pour entrer.
+  if (joinStep) {
+    return (
+      <AuthLayout
+        headline={<>Bienvenue sur <span style={{ color: '#FF6B35' }}>Yowyob Education</span></>}
+        sub="Rejoignez la communauté pour accéder aux contenus."
+        showTestimonial={false}
+      >
+        <div className="w-full max-w-[420px] text-center">
+          <div className="w-16 h-16 rounded-2xl bg-[#FFF3EC] border border-[#FF6B35]/20 flex items-center justify-center text-[#FF6B35] mb-6 shadow-sm mx-auto">
+            <svg width="30" height="30" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+            </svg>
+          </div>
+          {joinState === 'joined' ? (
+            <>
+              <h2 className="font-display text-[24px] font-extrabold text-[#0F172A] mb-3">Vous avez rejoint Yowyob Education 🎉</h2>
+              <p className="text-sm text-[#64748B] mb-6">Votre accès lecteur est actif. Reconnectez-vous pour accéder à la plateforme.</p>
+              <button
+                type="button"
+                onClick={() => { setJoinStep(null); setJoinState('idle'); setPassword(''); }}
+                className="w-full py-3 px-6 rounded-[10px] font-display font-semibold text-sm text-white bg-[#FF6B35] hover:bg-[#E55A2B] transition-all duration-200"
+              >
+                Se reconnecter
+              </button>
+            </>
+          ) : (
+            <>
+              <h2 className="font-display text-[24px] font-extrabold text-[#0F172A] mb-3">Nouveau sur Yowyob Education</h2>
+              <p className="text-sm text-[#64748B] mb-6 leading-relaxed">
+                Le compte <strong className="text-[#0F172A]">{joinStep.email}</strong> ne fait pas encore partie de
+                Yowyob Education. Cliquez sur <strong>Rejoindre</strong> pour rejoindre la communauté.
+              </p>
+              <button
+                type="button"
+                onClick={handleJoin}
+                disabled={joinState === 'joining'}
+                className="w-full py-3 px-6 rounded-[10px] font-display font-semibold text-sm text-white bg-[#FF6B35] hover:bg-[#E55A2B] disabled:opacity-60 transition-all duration-200"
+              >
+                {joinState === 'joining' ? 'En cours…' : 'Rejoindre'}
+              </button>
+              {joinState === 'error' && (
+                <p className="text-xs text-red-500 mt-2">Échec de l&apos;adhésion. Réessayez ou reconnectez-vous.</p>
+              )}
+            </>
+          )}
+
+          <div className="mt-8 pt-6 border-t border-gray-100 w-full text-center">
+            <button
+              type="button"
+              onClick={() => { setJoinStep(null); setJoinState('idle'); setGlobalError(null); }}
+              className="text-sm text-[#1F5FBF] font-medium hover:text-[#FF6B35] transition-colors"
+            >
+              Retour à la connexion
+            </button>
+          </div>
+        </div>
+      </AuthLayout>
+    );
+  }
+
   return (
     <AuthLayout
       headline={
@@ -457,83 +541,6 @@ export default function LoginPage() {
               {globalError}
             </div>
           )}
-
-          {/* Type de compte */}
-          <div className="mb-5">
-            <p className="font-display text-xs font-semibold text-[#0F172A] mb-2">Type de compte</p>
-            <div className="grid grid-cols-2 gap-2.5">
-              {[
-                {
-                  value: 'individual' as const,
-                  name: 'Freelance',
-                  desc: 'Usage personnel',
-                  icon: (
-                    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"/>
-                    </svg>
-                  ),
-                },
-                {
-                  value: 'organization' as const,
-                  name: 'Organisation',
-                  desc: 'Équipe / Entreprise',
-                  icon: (
-                    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-                      <path d="M9 22V12h6v10"/>
-                    </svg>
-                  ),
-                },
-              ].map((opt) => {
-                const selected = accountType === opt.value;
-                return (
-                  <label
-                    key={opt.value}
-                    htmlFor={`acct-${opt.value}`}
-                    className="relative flex flex-col items-center gap-2 p-3.5 rounded-[12px] cursor-pointer transition-all duration-200 text-center"
-                    style={{
-                      border: selected ? '2px solid #FF6B35' : '2px solid #E2E8F0',
-                      background: selected ? '#FFF3EC' : '#fff',
-                      boxShadow: selected ? '0 0 0 3px rgba(255,107,53,.1)' : 'none',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      id={`acct-${opt.value}`}
-                      name="acctType"
-                      value={opt.value}
-                      checked={selected}
-                      onChange={() => { setAccountType(opt.value); setGlobalError(null); }}
-                      className="absolute opacity-0 w-0 h-0"
-                    />
-                    <div
-                      className="w-9 h-9 rounded-[10px] flex items-center justify-center transition-all"
-                      style={{
-                        background: selected ? 'rgba(255,107,53,.15)' : '#F1F5F9',
-                        color: selected ? '#FF6B35' : '#94A3B8',
-                      }}
-                    >
-                      {opt.icon}
-                    </div>
-                    <div>
-                      <div className="font-display text-[13px] font-bold text-[#0F172A]">{opt.name}</div>
-                      <div className="text-[11px] text-[#64748B]">{opt.desc}</div>
-                    </div>
-                    {selected && (
-                      <div
-                        className="absolute top-2 right-2 w-[18px] h-[18px] rounded-full flex items-center justify-center"
-                        style={{ background: '#FF6B35' }}
-                      >
-                        <svg width="10" height="10" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24">
-                          <path d="M20 6L9 17l-5-5"/>
-                        </svg>
-                      </div>
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
 
           <form onSubmit={handleSubmit} noValidate aria-label="Formulaire de connexion">
             {/* Email */}

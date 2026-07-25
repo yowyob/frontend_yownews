@@ -12,8 +12,8 @@ export function Hero() {
           Grandissez avec Yowyob Education
         </h1>
         <p className="lead">
-          Des milliers d&apos;articles, podcasts et cours créés par des experts camerounais et
-          africains, pour booster vos compétences et nourrir votre curiosité, gratuitement.
+          Des milliers d&apos;articles, podcasts et cours créés par des experts du monde entier,
+          pour booster vos compétences et nourrir votre curiosité, gratuitement.
         </p>
         <div className="ctas">
           <Link href="/auth/sign-up" className="lv-btn lv-btn-orange">

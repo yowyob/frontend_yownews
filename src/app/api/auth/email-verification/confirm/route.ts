@@ -2,7 +2,6 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { handleRoute, fail } from '@/server/api-response';
 import * as authApi from '@/server/ksm/modules/auth';
-import { provisionOwnerRole } from '@/server/ksm/admin-session';
 
 export async function POST(request: NextRequest) {
   return handleRoute(async () => {
@@ -11,16 +10,8 @@ export async function POST(request: NextRequest) {
     if (!token) {
       return fail(400, 'VALIDATION_ERROR', 'token is required');
     }
-    const result = await authApi.confirmEmailVerification(token);
-
-    // Attribué ici (pas au sign-up) : dans le cas courant (vérification requise),
-    // le userId n'est connu qu'à cette étape — et l'attribution doit précéder le
-    // 1ᵉʳ login pour que le token de cet utilisateur porte déjà OWNER (nécessaire
-    // pour créer son organisation freelance, cf. guide KSM).
-    if (result.emailVerified) {
-      await provisionOwnerRole(result.id);
-    }
-
-    return result;
+    // Vérification email uniquement. Le rattachement à Yowyob Education se fait via « Rejoindre »
+    // (invitation employé) au login, pas ici.
+    return authApi.confirmEmailVerification(token);
   });
 }

@@ -162,6 +162,17 @@ export function identifyAccount(principal: string) {
 
 // ── Sign-up — email verification ──────────────────────────────────────────────
 
+// Renvoie l'email de vérification (KSM génère un lien à durée limitée). Non authentifié : le
+// X-Tenant-Id doit être fourni explicitement (l'appelant l'a via le contexte découvert).
+export function resendEmailVerification(principal: string, tenantId?: string) {
+  return callKsm<{ challengeTokenPreview?: string | null }>('/api/auth/email-verification/resend', {
+    method: 'POST',
+    body: { principal },
+    authenticated: false,
+    ...(tenantId ? { headers: { 'X-Tenant-Id': tenantId } } : {}),
+  });
+}
+
 export function confirmEmailVerification(verificationToken: string) {
   return callKsm<{ id: string; email: string; emailVerified: boolean }>(
     '/api/auth/email-verification/confirm',

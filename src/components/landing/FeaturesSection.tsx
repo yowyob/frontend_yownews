@@ -9,8 +9,8 @@ const svg = (d: ReactNode) => (
 const FEATURES: { ic: ReactNode; title: string; desc: string }[] = [
   {
     ic: svg(<><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>),
-    title: 'Contenus adaptés au Cameroun',
-    desc: 'Des articles, cours et podcasts ancrés dans les réalités locales, de Douala à Yaoundé, de Bamenda à Garoua.',
+    title: 'Contenus pour tous les profils',
+    desc: 'Des articles, cours et podcasts pensés pour des apprenants du monde entier, quel que soit votre niveau.',
   },
   {
     ic: svg(<><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>),
@@ -24,8 +24,8 @@ const FEATURES: { ic: ReactNode; title: string; desc: string }[] = [
   },
   {
     ic: svg(<><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></>),
-    title: 'Voix locales',
-    desc: 'Des experts, entrepreneurs et enseignants camerounais partagent leur savoir et leur expérience.',
+    title: 'Voix d’experts',
+    desc: 'Des experts, entrepreneurs et enseignants du monde entier partagent leur savoir et leur expérience.',
   },
   {
     ic: svg(<><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></>),

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Sora, Plus_Jakarta_Sans } from 'next/font/google';
+import { Sora, Plus_Jakarta_Sans, Poppins } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { SessionProvider } from '@/components/providers/session-provider';
@@ -20,9 +20,18 @@ const jakarta = Plus_Jakarta_Sans({
   display: 'swap',
 });
 
+// Substitut ouvert de « Google Sans » (police de chrome://whats-new, propriétaire) pour la landing :
+// utilisé en fallback derrière 'Google Sans'/'Google Sans Text' dans landingStyles.ts (.lv-root).
+const poppins = Poppins({
+  variable: '--font-poppins',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800', '900'],
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'Yowyob Education. Apprenez. Explorez. Grandissez.',
-  description: 'La plateforme éducative camerounaise qui réunit blogs, podcasts et cours.',
+  description: 'La plateforme éducative qui réunit blogs, podcasts et cours.',
 };
 
 export default async function LocaleLayout({
@@ -51,7 +60,7 @@ export default async function LocaleLayout({
   }
 
   return (
-    <html lang={locale} className={`${sora.variable} ${jakarta.variable}`} data-scroll-behavior="smooth">
+    <html lang={locale} className={`${sora.variable} ${jakarta.variable} ${poppins.variable}`} data-scroll-behavior="smooth">
       <body>
         <NextIntlClientProvider messages={messages} locale={locale}>
           <QueryProvider>

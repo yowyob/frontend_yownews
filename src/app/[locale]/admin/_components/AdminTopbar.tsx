@@ -1,11 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
+import { useSessionUser } from '@/components/providers/session-provider';
+import UserAvatar from '@/components/ui/UserAvatar';
 import OrgSwitcher from './OrgSwitcher';
-
-function initials(name: string) {
-  return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
-}
 
 type Variant = 'admin' | 'editor' | 'reader';
 
@@ -47,6 +45,7 @@ const MOCK_ROLE_LABELS: Record<Variant, string> = { admin: 'Administrateur', edi
 export default function AdminTopbar({ displayName, variant = 'admin', mockMode = false }: { displayName: string; variant?: Variant; mockMode?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
+  const sessionUser = useSessionUser();
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
@@ -241,9 +240,8 @@ export default function AdminTopbar({ displayName, variant = 'admin', mockMode =
           onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = 'var(--gray-50)')}
           onMouseLeave={(e) => { if (!profileOpen) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
         >
-          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '13px', color: '#fff', flexShrink: 0 }}>
-            {initials(displayName)}
-          </div>
+          <UserAvatar name={displayName} userId={sessionUser?.id} size={36} fontSize={13} />
+
           <span style={{ fontFamily: 'var(--font-d)', fontSize: '13px', fontWeight: 600, color: 'var(--dark)' }} className="tb-name">
             {displayName.split(' ')[0]}
           </span>

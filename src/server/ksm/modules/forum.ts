@@ -6,7 +6,7 @@ import { serverEnv } from '@/env';
 import { MOCK_FORUM_GROUPS, MOCK_FORUM_POSTS, MOCK_FORUM_CATEGORIES } from '@/server/mock-data';
 
 export type ForumStatus = 'PENDING' | 'VALIDATED' | 'REJECTED';
-export type GroupType = 'FORUM' | 'COMMUNITY' | 'PUBLIC';
+export type GroupType = 'FORUM' | 'COMMUNITY';
 
 export type DiscussionGroup = {
   groupId: string;
@@ -18,13 +18,14 @@ export type DiscussionGroup = {
   creatorName?: string | null;
   members?: string[] | null;
   tenantId?: string | null;
+  // Hiérarchie Communauté → Forums : communauté parente d'un forum enfant (null = autonome/communauté).
+  parentCommunityId?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
 
 export type ForumPost = {
   postId: string;
-  title: string;
   content: string;
   authorId: string;
   authorName?: string | null;
@@ -107,9 +108,15 @@ export async function deleteGroup(session: AppSession, groupId: string) {
   await callKsm<Response>(`/api/v1/forum/groups/${groupId}`, { method: 'DELETE', raw: true }, { session });
 }
 
-export async function createGroup(session: AppSession, body: { name: string; description?: string; type: GroupType; creatorId: string; creatorName?: string; members?: string[] }) {
+export async function createGroup(session: AppSession, body: { name: string; description?: string; type: GroupType; creatorId: string; creatorName?: string; members?: string[]; parentCommunityId?: string }) {
   const res = await callKsm<Response>('/api/v1/forum/groups', { method: 'POST', body, raw: true }, { session });
   return readRaw<DiscussionGroup>(res);
+}
+
+// Forums enfants (VALIDÉS) d'une communauté — hiérarchie Communauté → Forums.
+export async function listForumsByCommunity(session: AppSession, communityId: string) {
+  const res = await callKsm<Response>(`/api/v1/forum/groups/${communityId}/forums`, { method: 'GET', raw: true }, { session });
+  return readRaw<DiscussionGroup[]>(res);
 }
 
 export async function validateGroup(session: AppSession, groupId: string) {
@@ -168,7 +175,7 @@ export async function getPost(session: AppSession, postId: string, memberId: str
   return readRaw<ForumPost>(res);
 }
 
-export async function createPost(session: AppSession, body: { title: string; content: string; authorId: string; authorName?: string; groupId: string; categoriesIds: string[] }) {
+export async function createPost(session: AppSession, body: { content: string; authorId: string; authorName?: string; groupId: string; categoriesIds: string[] }) {
   const res = await callKsm<Response>('/api/v1/forum/posts', { method: 'POST', body, raw: true }, { session });
   return readRaw<ForumPost>(res);
 }

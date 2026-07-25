@@ -322,7 +322,7 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
         type="button"
         onClick={() => setMobileOpen(true)}
         aria-label="Ouvrir le menu"
-        className="sb-mobile-toggle"
+        className={`sb-mobile-toggle${mobileOpen ? ' sb-mobile-toggle-hidden' : ''}`}
         style={{
           position: 'fixed', top: '14px', left: '14px', zIndex: 210,
           width: '38px', height: '38px', borderRadius: '9px', border: 'none',
@@ -349,8 +349,8 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
         zIndex: 200, overflowY: 'auto', transition: 'width .3s ease, transform .3s ease',
       }} className={`${collapsed ? 'sb sb-collapsed' : 'sb'}${mobileOpen ? ' sb-mobile-open' : ''}`}>
         {/* Header */}
-        <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: '10px', flexShrink: 0 }}>
-          {!collapsed && (
+        <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,255,255,.1)', display: 'flex', alignItems: 'center', justifyContent: (collapsed && !mobileOpen) ? 'center' : 'space-between', gap: '10px', flexShrink: 0 }}>
+          {(!collapsed || mobileOpen) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
               <Link href="/" style={{ width: '34px', height: '34px', background: '#FF6B35', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '14px', color: '#fff', flexShrink: 0, textDecoration: 'none' }}>YE</Link>
               <span style={{ fontFamily: 'var(--font-d)', fontSize: '16px', fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -360,17 +360,25 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
           )}
           <button
             type="button"
-            onClick={() => setCollapsed((c) => !c)}
-            title={collapsed ? 'Déplier le menu' : 'Replier le menu'}
+            onClick={() => {
+              if (mobileOpen) {
+                setMobileOpen(false);
+              } else {
+                setCollapsed((c) => !c);
+              }
+            }}
+            title={mobileOpen ? 'Fermer le menu' : collapsed ? 'Déplier le menu' : 'Replier le menu'}
             style={{
               flexShrink: 0, width: '28px', height: '28px', borderRadius: '7px', border: 'none',
               background: 'rgba(255,255,255,.08)', color: '#fff', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 300,
             }}
           >
-            {collapsed
-              ? <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-              : <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            {mobileOpen
+              ? <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              : collapsed
+                ? <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                : <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
             }
           </button>
         </div>
@@ -501,10 +509,6 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                           {renderSubLink('/admin/blogs', 'Mes blogs', true)}
                           {renderSubLink('/admin/blogs/moderation', 'Gestion des blogs')}
 
-                          {renderSectionLabel('Cours')}
-                          {renderSubLink('/admin/courses', 'Mes cours', true)}
-                          {renderSubLink('/admin/courses/moderation', 'Gestion des cours')}
-
                           {renderSectionLabel('Podcast')}
                           {renderSubLink('/admin/podcasts', 'Mes podcasts', true)}
                           {renderSubLink('/admin/podcasts/moderation', 'Gestion des podcasts')}
@@ -516,7 +520,6 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                       ) : (
                         <>
                           {renderSubLink('/editor/blog', 'Blogs')}
-                          {renderSubLink('/editor/course', 'Cours')}
                           {renderSubLink('/editor/podcast', 'Podcasts')}
                         </>
                       )}
@@ -587,6 +590,7 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                         <div className="sb-text" style={{ marginBottom: '4px' }}>
                           {renderSubLink('/admin/forums', 'Mes forums', true)}
                           {renderSubLink('/admin/forums/moderation', 'Gestion des forums')}
+                          {renderSubLink('/admin/forums/communities', 'Gestion des communautés')}
                         </div>
                       )}
                     </>
@@ -675,6 +679,7 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
           .sb.sb-mobile-open { transform: translateX(0); }
           .sb.sb-mobile-open .sb-text { display: block!important; }
           .sb-mobile-toggle { display: flex!important; }
+          .sb-mobile-toggle-hidden { display: none!important; }
         }
       `}</style>
     </>

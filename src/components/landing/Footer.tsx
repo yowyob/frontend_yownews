@@ -10,8 +10,8 @@ export function Footer() {
               <span className="lv-logo" aria-hidden="true">YE</span> Yowyob Education
             </div>
             <p style={{ maxWidth: 320 }}>
-              La plateforme de contenu éducatif du Cameroun. Blogs, podcasts, cours et communauté
-              pour les talents d&apos;ici.
+              La plateforme de contenu éducatif ouverte sur le monde. Blogs, podcasts, cours et
+              communauté pour tous les talents.
             </p>
           </div>
           <div>
@@ -39,7 +39,7 @@ export function Footer() {
             </ul>
           </div>
         </div>
-        <div className="bot">© 2025 Yowyob Education. Cameroun.</div>
+        <div className="bot">© 2025 Yowyob Education.</div>
       </div>
     </footer>
   );

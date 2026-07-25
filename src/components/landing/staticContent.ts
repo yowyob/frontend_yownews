@@ -2,10 +2,9 @@ import type { FeedItem } from '@/components/feed/ContentFeedCard';
 
 /**
  * Contenu statique des 3 sections de la landing (articles/podcasts/cours) — volontairement
- * figé (pas de fetch KSM), avec de vraies photos Unsplash. Chaque photo avec personnes a été
- * vérifiée visuellement avant sélection pour représenter des personnes noires/africaines
- * (cohérent avec le public visé par la plateforme) ; les autres sont des photos d'objets/
- * scènes sans personne. Le hero carousel (HeroCarousel.tsx) reste dynamique, hors périmètre.
+ * figé (pas de fetch KSM), avec de vraies photos Unsplash neutres (objets/scènes ou personnes
+ * sans marqueur géographique), cohérent avec une audience internationale. Le hero carousel
+ * (HeroCarousel.tsx) reste dynamique, hors périmètre.
  */
 
 export const STATIC_BLOGS: FeedItem[] = [
@@ -22,8 +21,8 @@ export const STATIC_BLOGS: FeedItem[] = [
   {
     id: 'static-blog-2',
     contentType: 'BLOG',
-    title: "5 stratégies pour lancer sa micro-entreprise en Afrique de l'Ouest",
-    description: "Retour d'expérience d'entrepreneurs ivoiriens sur le financement et la formalisation.",
+    title: "5 stratégies pour lancer sa micro-entreprise en ligne",
+    description: "Retour d'expérience d'entrepreneurs sur le financement et la formalisation.",
     domain: 'BUSINESS',
     freeTags: ['Entrepreneuriat'],
     publishedAt: '2026-06-08T14:30:00.000Z',
@@ -45,8 +44,8 @@ export const STATIC_PODCASTS: FeedItem[] = [
   {
     id: 'static-podcast-1',
     contentType: 'PODCAST',
-    title: 'Épisode 12 — Construire une startup EdTech en Afrique',
-    description: 'Discussion avec une fondatrice basée à Abidjan sur les défis du financement local.',
+    title: 'Épisode 12 — Construire une startup EdTech de zéro',
+    description: "Discussion avec une fondatrice sur les défis du financement d'une jeune startup.",
     domain: 'BUSINESS',
     freeTags: ['Startup'],
     publishedAt: '2026-06-10T07:00:00.000Z',

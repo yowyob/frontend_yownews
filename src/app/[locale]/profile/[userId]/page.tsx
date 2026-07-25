@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { apiFetch, BffApiError } from '@/lib/api-client';
 import { useSessionUser } from '@/components/providers/session-provider';
 import { Link } from '@/i18n/navigation';
+import UserAvatar from '@/components/ui/UserAvatar';
 
 type PublicContentInfo = {
   id: string;
@@ -45,12 +46,6 @@ function formatDate(iso?: string | null): string {
   } catch {
     return iso;
   }
-}
-
-function initials(firstName?: string, lastName?: string) {
-  const f = firstName?.[0] ?? '';
-  const l = lastName?.[0] ?? '';
-  return (f + l).toUpperCase() || '?';
 }
 
 export default function UserProfilePage() {
@@ -128,9 +123,8 @@ export default function UserProfilePage() {
       {/* En-tête profil public */}
       <div style={{ background: '#fff', border: '1px solid var(--gray-100, #f3f4f6)', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
-          <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '26px', flexShrink: 0 }}>
-            {initials(profile.firstName, profile.lastName)}
-          </div>
+          <UserAvatar name={name} photoId={profile.photoId} size={72} fontSize={26} />
+
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--primary)', margin: 0 }}>{name}</h1>

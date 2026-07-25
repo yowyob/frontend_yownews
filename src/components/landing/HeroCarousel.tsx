@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { usePublicFeed } from './PublicFeedProvider';
 
-// Visuels de repli (thème africain / Cameroun) si aucun contenu publié n'a encore de couverture.
+// Visuels de repli génériques si aucun contenu publié n'a encore de couverture.
 const FALLBACK = [
   'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1400&q=80',
   'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=1400&q=80',

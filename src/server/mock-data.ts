@@ -36,19 +36,19 @@ export const MOCK_COURSE_FEED: FeedItem[] = [
 export const MOCK_FORUM_GROUPS: DiscussionGroup[] = [
   { groupId: 'mock-group-1', name: 'Développeurs Afrique', description: 'Échanges techniques entre développeurs francophones — entraide, code review, offres.', type: 'FORUM', status: 'VALIDATED', creatorId: 'mock-author-1', creatorName: 'Kwame Asante', members: ['mock-author-1', 'mock-author-2', 'mock-author-3'], createdAt: '2026-01-15T00:00:00.000Z' },
   { groupId: 'mock-group-2', name: 'Entrepreneurs & Startups', description: "Communauté d'entrepreneurs qui partagent retours d'expérience et opportunités de financement.", type: 'COMMUNITY', status: 'VALIDATED', creatorId: 'mock-author-2', creatorName: 'Aïcha Traoré', members: ['mock-author-2', 'mock-author-4'], createdAt: '2026-02-02T00:00:00.000Z' },
-  { groupId: 'mock-group-3', name: 'Design & Créativité', description: 'Un espace pour partager ses maquettes, demander des retours et discuter des tendances.', type: 'PUBLIC', status: 'VALIDATED', creatorId: 'mock-author-3', creatorName: 'Mariam Kaboré', members: ['mock-author-3'], createdAt: '2026-02-20T00:00:00.000Z' },
+  { groupId: 'mock-group-3', name: 'Design & Créativité', description: 'Un espace pour partager ses maquettes, demander des retours et discuter des tendances.', type: 'FORUM', status: 'VALIDATED', creatorId: 'mock-author-3', creatorName: 'Mariam Kaboré', members: ['mock-author-3'], createdAt: '2026-02-20T00:00:00.000Z' },
 ];
 
 export const MOCK_FORUM_POSTS: Record<string, ForumPost[]> = {
   'mock-group-1': [
-    { postId: 'mock-post-1', title: 'Quelqu\'un utilise déjà le nouveau App Router en production ?', content: 'Je migre un projet Pages Router et je cherche des retours d\'expérience sur les points de friction.', authorId: 'mock-author-1', authorName: 'Kwame Asante', groupId: 'mock-group-1', numberOfLikes: 14, numberOfDislikes: 0, commentCount: 6, creationDate: '2026-06-09T10:00:00.000Z' },
-    { postId: 'mock-post-2', title: 'Retour sur 6 mois de TypeScript strict', content: 'Le mode strict fait mal au début mais évite pas mal de bugs en prod. Voici ce qu\'on a appris.', authorId: 'mock-author-3', authorName: 'Mariam Kaboré', groupId: 'mock-group-1', numberOfLikes: 9, numberOfDislikes: 1, commentCount: 3, creationDate: '2026-06-04T15:30:00.000Z' },
+    { postId: 'mock-post-1', content: 'Je migre un projet Pages Router et je cherche des retours d\'expérience sur les points de friction.', authorId: 'mock-author-1', authorName: 'Kwame Asante', groupId: 'mock-group-1', numberOfLikes: 14, numberOfDislikes: 0, commentCount: 6, creationDate: '2026-06-09T10:00:00.000Z' },
+    { postId: 'mock-post-2', content: 'Le mode strict fait mal au début mais évite pas mal de bugs en prod. Voici ce qu\'on a appris.', authorId: 'mock-author-3', authorName: 'Mariam Kaboré', groupId: 'mock-group-1', numberOfLikes: 9, numberOfDislikes: 1, commentCount: 3, creationDate: '2026-06-04T15:30:00.000Z' },
   ],
   'mock-group-2': [
-    { postId: 'mock-post-3', title: 'Comment avez-vous trouvé vos premiers investisseurs ?', content: 'Je lance ma startup EdTech et je cherche des pistes de financement adaptées au marché local.', authorId: 'mock-author-2', authorName: 'Aïcha Traoré', groupId: 'mock-group-2', numberOfLikes: 22, numberOfDislikes: 0, commentCount: 11, creationDate: '2026-06-07T09:00:00.000Z' },
+    { postId: 'mock-post-3', content: 'Je lance ma startup EdTech et je cherche des pistes de financement adaptées au marché local.', authorId: 'mock-author-2', authorName: 'Aïcha Traoré', groupId: 'mock-group-2', numberOfLikes: 22, numberOfDislikes: 0, commentCount: 11, creationDate: '2026-06-07T09:00:00.000Z' },
   ],
   'mock-group-3': [
-    { postId: 'mock-post-4', title: 'Retours sur ma maquette de landing page', content: 'Premier jet pour un client e-commerce, je suis preneur de critiques constructives.', authorId: 'mock-author-3', authorName: 'Mariam Kaboré', groupId: 'mock-group-3', numberOfLikes: 7, numberOfDislikes: 0, commentCount: 4, creationDate: '2026-06-11T12:00:00.000Z' },
+    { postId: 'mock-post-4', content: 'Premier jet pour un client e-commerce, je suis preneur de critiques constructives.', authorId: 'mock-author-3', authorName: 'Mariam Kaboré', groupId: 'mock-group-3', numberOfLikes: 7, numberOfDislikes: 0, commentCount: 4, creationDate: '2026-06-11T12:00:00.000Z' },
   ],
 };
 

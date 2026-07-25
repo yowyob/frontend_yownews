@@ -3,16 +3,22 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { AppLink } from '@/components/ui/app-link';
 
-type GroupType = 'FORUM' | 'COMMUNITY' | 'PUBLIC';
-type DiscussionGroup = { groupId: string; name: string; description?: string | null; type: string; createdAt?: string | null };
+type GroupType = 'FORUM' | 'COMMUNITY';
+type DiscussionGroup = { groupId: string; name: string; description?: string | null; type: string; parentCommunityId?: string | null; createdAt?: string | null };
 
-const TYPE_LABELS: Record<GroupType, string> = { FORUM: 'Forum', COMMUNITY: 'Communauté', PUBLIC: 'Forum public' };
+const TYPE_LABELS: Record<GroupType, string> = { FORUM: 'Forum', COMMUNITY: 'Communauté' };
+
+const TYPE_OPTIONS: { value: 'FORUM' | 'COMMUNITY'; label: string; hint: string }[] = [
+  { value: 'FORUM', label: 'Forum', hint: 'Ouvert — visible et accessible à tous' },
+  { value: 'COMMUNITY', label: 'Communauté', hint: 'Privée — adhésion sur demande, approuvée par le créateur' },
+];
 
 export default function ForumListPage() {
   const [groups, setGroups] = useState<DiscussionGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [newType, setNewType] = useState<'FORUM' | 'COMMUNITY'>('FORUM');
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -20,7 +26,8 @@ export default function ForumListPage() {
   const load = useCallback(async () => {
     try {
       const data = await apiFetch<DiscussionGroup[]>('/api/forum/groups');
-      setGroups(Array.isArray(data) ? data : []);
+      // Les forums enfants d'une communauté ne s'affichent qu'à l'intérieur de leur communauté.
+      setGroups(Array.isArray(data) ? data.filter((g) => !g.parentCommunityId) : []);
     } catch { setGroups([]); }
     finally { setLoading(false); }
   }, []);
@@ -32,9 +39,10 @@ export default function ForumListPage() {
     setBusy(true);
     setMessage(null);
     try {
-      const body: Record<string, unknown> = { name: newName.trim(), description: newDesc.trim() || undefined, type: 'PUBLIC' };
+      // members:[créateur] est ajouté côté route BFF si COMMUNITY (exigence KSM).
+      const body: Record<string, unknown> = { name: newName.trim(), description: newDesc.trim() || undefined, type: newType };
       await apiFetch('/api/forum/groups', { method: 'POST', body });
-      setNewName(''); setNewDesc(''); setShowForm(false);
+      setNewName(''); setNewDesc(''); setNewType('FORUM'); setShowForm(false);
       setMessage({ kind: 'ok', text: 'Votre forum a été soumis à validation par un administrateur.' });
       load(); // Recharge la liste
     } catch (e) {
@@ -61,6 +69,21 @@ export default function ForumListPage() {
           <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700 }}>Proposer un nouveau forum</h3>
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nom du forum *" style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '8px 12px', fontSize: '14px' }} />
           <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Description (optionnelle)" style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '8px 12px', fontSize: '14px' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--gray-600)' }}>Type</span>
+            {TYPE_OPTIONS.map((o) => {
+              const on = newType === o.value;
+              return (
+                <button key={o.value} type="button" onClick={() => setNewType(o.value)} style={{
+                  textAlign: 'left', border: `1px solid ${on ? 'var(--accent)' : 'var(--gray-200)'}`,
+                  background: on ? 'rgba(239,68,68,.06)' : '#fff', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer',
+                }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: on ? 'var(--accent)' : 'var(--gray-700)' }}>{o.label}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--gray-500)' }}>{o.hint}</div>
+                </button>
+              );
+            })}
+          </div>
           <p style={{ margin: 0, fontSize: '12px', color: 'var(--gray-400)' }}>Votre proposition sera soumise à validation par un administrateur avant d&apos;être publiée.</p>
           <button type="button" onClick={createGroup} disabled={!newName.trim() || busy} style={{ border: 'none', borderRadius: '8px', padding: '9px 18px', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: '13px', cursor: 'pointer', opacity: newName.trim() ? 1 : 0.5, alignSelf: 'flex-start' }}>
             {busy ? 'Envoi…' : 'Soumettre'}

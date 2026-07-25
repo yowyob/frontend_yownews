@@ -4,11 +4,12 @@ import { apiFetch } from '@/lib/api-client';
 import RowMenu, { type MenuItem } from '@/components/education/RowMenu';
 
 type ForumStatus = 'PENDING' | 'VALIDATED' | 'REJECTED';
-type GroupType = 'FORUM' | 'COMMUNITY' | 'PUBLIC';
+type GroupType = 'FORUM' | 'COMMUNITY';
 type DiscussionGroup = {
   groupId: string; name: string; description?: string | null;
   type: GroupType; status: ForumStatus;
   creatorId?: string | null; creatorName?: string | null;
+  parentCommunityId?: string | null;
   createdAt?: string | null;
 };
 
@@ -24,7 +25,7 @@ const STATUS_BADGE: Record<ForumStatus, { label: string; bg: string; color: stri
   REJECTED: { label: 'Rejeté', bg: '#FEF2F2', color: '#DC2626' },
 };
 
-const TYPE_LABELS: Record<GroupType, string> = { FORUM: 'Forum', COMMUNITY: 'Communauté', PUBLIC: 'Forum public' };
+const TYPE_LABELS: Record<GroupType, string> = { FORUM: 'Forum', COMMUNITY: 'Communauté' };
 
 const td: React.CSSProperties = { padding: '12px 16px', fontSize: 14, color: 'var(--gray-800)', borderTop: '1px solid var(--gray-100)' };
 const th: React.CSSProperties = { textAlign: 'left', padding: '12px 16px', fontSize: 12, fontWeight: 600, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.5px' };
@@ -38,7 +39,8 @@ function StatusBadge({ statut }: { statut: ForumStatus }) {
 function EditModal({ group, onClose, onSaved }: { group: DiscussionGroup; onClose: () => void; onSaved: (g: DiscussionGroup) => void }) {
   const [name, setName] = useState(group.name);
   const [description, setDescription] = useState(group.description ?? '');
-  const [type, setType] = useState<GroupType>(group.type);
+  // Seuls FORUM et COMMUNITY existent.
+  const [type, setType] = useState<GroupType>(group.type === 'COMMUNITY' ? 'COMMUNITY' : 'FORUM');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,7 +76,7 @@ function EditModal({ group, onClose, onSaved }: { group: DiscussionGroup; onClos
           <div>
             <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px', display: 'block' }}>Type</label>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {(['FORUM', 'PUBLIC', 'COMMUNITY'] as GroupType[]).map((t) => (
+              {(['FORUM', 'COMMUNITY'] as GroupType[]).map((t) => (
                 <button key={t} type="button" onClick={() => setType(t)} style={{
                   border: `1px solid ${type === t ? 'var(--accent)' : '#e5e7eb'}`,
                   background: type === t ? 'rgba(239,68,68,.08)' : '#fff',
@@ -97,7 +99,8 @@ function EditModal({ group, onClose, onSaved }: { group: DiscussionGroup; onClos
   );
 }
 
-export default function ForumModerationWorkspace() {
+export default function ForumModerationWorkspace({ kind = 'forum' }: { kind?: 'forum' | 'community' }) {
+  const isCommunity = kind === 'community';
   const [tab, setTab] = useState<ForumStatus>('PENDING');
   const [items, setItems] = useState<DiscussionGroup[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -114,7 +117,9 @@ export default function ForumModerationWorkspace() {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = (items ?? []).filter((g) => g.status === tab);
+  // `community` → les COMMUNITY ; `forum` → les forums top-level (pas les forums enfants d'une communauté).
+  const kindItems = (items ?? []).filter((g) => isCommunity ? g.type === 'COMMUNITY' : (g.type === 'FORUM' && !g.parentCommunityId));
+  const filtered = kindItems.filter((g) => g.status === tab);
 
   const act = async (groupId: string, action: 'validate' | 'reject') => {
     setBusyId(groupId); setError(null);
@@ -152,7 +157,7 @@ export default function ForumModerationWorkspace() {
 
   return (
     <div>
-      <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '20px', fontWeight: 800, marginBottom: '16px' }}>Gestion des forums</h2>
+      <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '20px', fontWeight: 800, marginBottom: '16px' }}>{isCommunity ? 'Gestion des communautés' : 'Gestion des forums'}</h2>
 
       {error && <div style={{ padding: '10px 14px', background: '#FEF2F2', color: '#DC2626', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>{error}</div>}
 
@@ -164,7 +169,7 @@ export default function ForumModerationWorkspace() {
             background: tab === t.key ? 'var(--blue)' : '#fff',
             color: tab === t.key ? '#fff' : 'var(--gray-600)',
             fontSize: 13, fontWeight: 600, cursor: 'pointer',
-          }}>{t.label} ({(items ?? []).filter((g) => g.status === t.key).length})</button>
+          }}>{t.label} ({kindItems.filter((g) => g.status === t.key).length})</button>
         ))}
       </div>
 

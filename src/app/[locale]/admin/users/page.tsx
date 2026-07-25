@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react';
 import { apiFetch } from '@/lib/api-client';
+import UserAvatar from '@/components/ui/UserAvatar';
 
 // Codes de rôle RBAC education (cf. templates KSM). Deux rôles seulement : Rédacteur / Lecteur.
 const ROLE_EDITOR = 'EDUCATION_EDITOR_PERMISSIONS';
@@ -42,10 +43,6 @@ function roleKind(u: AdminUser): RoleKind {
 function displayName(u: AdminUser): string {
   const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
   return full || u.email;
-}
-function initials(u: AdminUser): string {
-  if (u.firstName || u.lastName) return `${u.firstName?.[0] ?? ''}${u.lastName?.[0] ?? ''}`.toUpperCase();
-  return u.email.slice(0, 2).toUpperCase();
 }
 function avatarColor(id: string): string {
   let h = 0;
@@ -218,7 +215,7 @@ export default function UsersPage() {
                   <tr key={u.userId} style={{ borderTop: '1px solid var(--gray-100)', background: idx % 2 === 1 ? 'var(--gray-50)' : '#fff', opacity: busyId === u.userId ? .5 : 1 }}>
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: avatarColor(u.userId), display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '12px', color: '#fff', flexShrink: 0 }}>{initials(u)}</div>
+                        <UserAvatar name={displayName(u)} userId={u.userId} size={36} fontSize={12} bg={avatarColor(u.userId)} />
                         <div>
                           <div style={{ fontFamily: 'var(--font-d)', fontSize: '13px', fontWeight: 600, color: 'var(--dark)' }}>{displayName(u)}</div>
                           <div style={{ fontSize: '11px', color: 'var(--gray-400)' }}>{u.email}</div>
