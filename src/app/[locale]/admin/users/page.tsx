@@ -8,9 +8,21 @@ const ROLE_EDITOR = 'EDUCATION_EDITOR_PERMISSIONS';
 const ROLE_READER = 'EDUCATION_READER_PERMISSIONS';
 
 type RoleRef = { assignmentId: string; roleId: string; code: string | null; name: string | null; scopeType: string | null };
-type AdminUser = {
+type TenantUser = {
   userId: string; email: string; username: string; status: string; createdAt: string | null;
   firstName: string | null; lastName: string | null; roles: RoleRef[];
+};
+// Membre de l'org (adhésion) renvoyé par /api/admin/members.
+type Member = {
+  id: string; userId: string; email: string; firstName: string | null; lastName: string | null;
+  roleName: string | null; status: string; photoId: string | null;
+};
+// Vue fusionnée affichée : l'adhésion (statut + membershipId + photo) enrichie des rôles RBAC
+// (assignmentId, pour le changement/révocation de rôle) résolus par userId.
+type AdminUser = {
+  userId: string; membershipId: string; email: string; username: string;
+  membershipStatus: string; createdAt: string | null;
+  firstName: string | null; lastName: string | null; photoId: string | null; roles: RoleRef[];
 };
 type AdminRole = { id: string; code: string; name: string };
 
@@ -40,7 +52,7 @@ function roleKind(u: AdminUser): RoleKind {
   if (codes.some((c) => c === 'SUPER_EDUCATION_SERVICES_MANAGER' || c === 'EDUCATION_MANAGER')) return 'admin';
   return 'none';
 }
-function displayName(u: AdminUser): string {
+function displayName(u: { firstName: string | null; lastName: string | null; email: string }): string {
   const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
   return full || u.email;
 }
@@ -48,6 +60,27 @@ function avatarColor(id: string): string {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+// Fusionne les membres de l'org avec les rôles RBAC (par userId). Seuls les membres invités
+// apparaissent (les comptes du tenant jamais invités sont ignorés).
+function mergeMembers(members: Member[], tenantUsers: TenantUser[]): AdminUser[] {
+  const byId = new Map(tenantUsers.map((u) => [u.userId, u]));
+  return members.map((m) => {
+    const tu = byId.get(m.userId);
+    return {
+      userId: m.userId,
+      membershipId: m.id,
+      email: m.email || tu?.email || '',
+      username: tu?.username ?? '',
+      membershipStatus: m.status,
+      createdAt: tu?.createdAt ?? null,
+      firstName: m.firstName ?? tu?.firstName ?? null,
+      lastName: m.lastName ?? tu?.lastName ?? null,
+      photoId: m.photoId ?? null,
+      roles: tu?.roles ?? [],
+    };
+  });
 }
 
 export default function UsersPage() {
@@ -64,35 +97,40 @@ export default function UsersPage() {
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2500); };
 
-  // Note: pas de setState synchrone (loading démarre déjà à true) → compatible react-hooks/set-state-in-effect.
+  // Charge membres de l'org + rôles RBAC (pour assignmentId) + rôles disponibles, et fusionne.
   const fetchData = useCallback(async () => {
-    try {
-      const [u, r] = await Promise.all([
-        apiFetch<AdminUser[]>('/api/admin/users'),
-        apiFetch<AdminRole[]>('/api/admin/roles'),
-      ]);
-      setUsers(Array.isArray(u) ? u : []);
-      setRoles(Array.isArray(r) ? r : []);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur de chargement');
-    } finally {
-      setLoading(false);
-    }
+    const [m, tu, r] = await Promise.all([
+      apiFetch<Member[]>('/api/admin/members'),
+      apiFetch<TenantUser[]>('/api/admin/users'),
+      apiFetch<AdminRole[]>('/api/admin/roles'),
+    ]);
+    setUsers(mergeMembers(Array.isArray(m) ? m : [], Array.isArray(tu) ? tu : []));
+    setRoles(Array.isArray(r) ? r : []);
+    setError(null);
   }, []);
 
-  const refresh = useCallback(async () => { setLoading(true); await fetchData(); }, [fetchData]);
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try { await fetchData(); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Erreur de chargement'); }
+    finally { setLoading(false); }
+  }, [fetchData]);
 
-  // Chargement initial : async inline + garde `cancelled` (idiome du repo, cf. TaxonomyManager).
+  // Chargement initial : async inline + garde `cancelled` (idiome du repo).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [u, r] = await Promise.all([
-          apiFetch<AdminUser[]>('/api/admin/users'),
+        const [m, tu, r] = await Promise.all([
+          apiFetch<Member[]>('/api/admin/members'),
+          apiFetch<TenantUser[]>('/api/admin/users'),
           apiFetch<AdminRole[]>('/api/admin/roles'),
         ]);
-        if (!cancelled) { setUsers(Array.isArray(u) ? u : []); setRoles(Array.isArray(r) ? r : []); setError(null); }
+        if (!cancelled) {
+          setUsers(mergeMembers(Array.isArray(m) ? m : [], Array.isArray(tu) ? tu : []));
+          setRoles(Array.isArray(r) ? r : []);
+          setError(null);
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur de chargement');
       } finally {
@@ -125,6 +163,21 @@ export default function UsersPage() {
       await fetchData();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Échec du changement de rôle');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function removeFromOrg(user: AdminUser) {
+    setMenu(null);
+    if (!window.confirm(`Retirer ${displayName(user)} de l'organisation ? Le compte perdra son accès (rôle) et devra être réinvité.`)) return;
+    setBusyId(user.userId);
+    try {
+      await apiFetch(`/api/admin/members/${user.membershipId}`, { method: 'DELETE' });
+      showToast(`${displayName(user)} retiré de l'organisation`);
+      await fetchData();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Échec du retrait');
     } finally {
       setBusyId(null);
     }
@@ -207,15 +260,16 @@ export default function UsersPage() {
               ) : error ? (
                 <tr><td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: '#DC2626', fontSize: '13px' }}>{error}</td></tr>
               ) : paginated.length === 0 ? (
-                <tr><td colSpan={5} style={{ padding: '48px', textAlign: 'center', color: 'var(--gray-400)', fontSize: '14px' }}>Aucun utilisateur</td></tr>
+                <tr><td colSpan={5} style={{ padding: '48px', textAlign: 'center', color: 'var(--gray-400)', fontSize: '14px' }}>Aucun membre</td></tr>
               ) : paginated.map((u, idx) => {
                 const kind = roleKind(u);
                 const badge = ROLE_BADGE[kind];
+                const active = u.membershipStatus === 'ACTIVE';
                 return (
                   <tr key={u.userId} style={{ borderTop: '1px solid var(--gray-100)', background: idx % 2 === 1 ? 'var(--gray-50)' : '#fff', opacity: busyId === u.userId ? .5 : 1 }}>
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <UserAvatar name={displayName(u)} userId={u.userId} size={36} fontSize={12} bg={avatarColor(u.userId)} />
+                        <UserAvatar name={displayName(u)} photoId={u.photoId} size={36} fontSize={12} bg={avatarColor(u.userId)} />
                         <div>
                           <div style={{ fontFamily: 'var(--font-d)', fontSize: '13px', fontWeight: 600, color: 'var(--dark)' }}>{displayName(u)}</div>
                           <div style={{ fontSize: '11px', color: 'var(--gray-400)' }}>{u.email}</div>
@@ -226,7 +280,7 @@ export default function UsersPage() {
                       <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, fontFamily: 'var(--font-d)', background: badge.bg, color: badge.color }}>{badge.label}</span>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, fontFamily: 'var(--font-d)', background: u.status === 'ACTIVE' ? '#F0FDF4' : 'var(--gray-100)', color: u.status === 'ACTIVE' ? '#16A34A' : 'var(--gray-500)' }}>{u.status === 'ACTIVE' ? 'Actif' : u.status}</span>
+                      <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, fontFamily: 'var(--font-d)', background: active ? '#F0FDF4' : '#FFF7ED', color: active ? '#16A34A' : '#EA580C' }}>{active ? 'Actif' : 'En attente'}</span>
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--gray-400)', whiteSpace: 'nowrap' }}>
                       {u.createdAt ? new Date(u.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
@@ -261,7 +315,7 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* Menu kebab ⋮ — changer le rôle */}
+      {/* Menu kebab ⋮ — changer le rôle / retirer de l'org */}
       {menu && menuUser && (
         <>
           <div onClick={() => setMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000 }} />
@@ -277,6 +331,11 @@ export default function UsersPage() {
                 </button>
               );
             })}
+            <div style={{ height: 1, background: 'var(--gray-100)', margin: '4px 6px' }} />
+            <button onClick={() => removeFromOrg(menuUser)} style={menuItemStyle('#DC2626')}>
+              <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" /></svg>
+              <span>Retirer de l&apos;org</span>
+            </button>
           </div>
         </>
       )}

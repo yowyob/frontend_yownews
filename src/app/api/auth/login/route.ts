@@ -4,11 +4,15 @@ import type { AppSession } from '@/lib/types/auth';
 import { handleRoute, fail } from '@/server/api-response';
 import * as authApi from '@/server/ksm/modules/auth';
 import { writeSession } from '@/server/session';
-import { buildSession, orgDisplayName, savePendingLogin, saveJoinPending } from '@/server/login-pending';
+import { buildSession, saveJoinPending } from '@/server/login-pending';
 import { ensureOrgServicesSubscribed } from '@/server/ksm/freelance-org';
-import { ensureServiceRolesSelf, type EntitlementLevel } from '@/server/ksm/admin-session';
+import { ensureServiceRolesSelf, getAdminSession, type EntitlementLevel } from '@/server/ksm/admin-session';
+import { resolvePlatformOrganizationId } from '@/server/ksm/platform-org';
+import { listEmployees } from '@/server/ksm/modules/employees';
 import { getMyApplication } from '@/server/ksm/modules/editor-applications';
 import { allowLoginAttempt, clientIp } from '@/server/rate-limit';
+import { isPlatformAdmin, isEducationEditor } from '@/lib/roles';
+import { HttpError } from '@/lib/types/api';
 import { logger } from '@/server/logger';
 
 // « Membre EDU » = le token porte déjà la permission lecteur éducation (rôle EDUCATION_READER de l'org
@@ -21,7 +25,10 @@ function hasEducationAccess(session: AppSession): boolean {
 export async function POST(request: NextRequest) {
   return handleRoute(async () => {
     const body = (await request.json()) as { email?: string; password?: string };
-    const principal = String(body.email ?? '').trim().toLowerCase();
+    // Le champ saisi est un identifiant Yowyob (username) ou un email. On ne force pas le lowercase :
+    // un username peut être sensible à la casse, et l'email réel n'est de toute façon plus un
+    // identifiant de connexion côté KSM (il renvoie l'identifiant par email — cf. plus bas).
+    const principal = String(body.email ?? '').trim();
     const password = String(body.password ?? '');
 
     if (!principal || !password) {
@@ -33,7 +40,19 @@ export async function POST(request: NextRequest) {
       return fail(429, 'RATE_LIMITED', 'Trop de tentatives. Réessayez dans une minute.');
     }
 
-    const discovery = await authApi.discoverContexts(principal, password);
+    // Depuis le rebuild KSM, l'ancien email n'est plus un identifiant de connexion : discover-contexts
+    // répond 401 AUTH_YOWYOB_IDENTITY_REMINDER_SENT et KSM envoie l'identifiant Yowyob (username) par
+    // email. On traduit ce cas en résultat positif dédié pour que le client affiche l'écran adéquat
+    // (sans le router à tort vers l'inscription). Les autres erreurs KSM sont relancées telles quelles.
+    let discovery: Awaited<ReturnType<typeof authApi.discoverContexts>>;
+    try {
+      discovery = await authApi.discoverContexts(principal, password);
+    } catch (cause) {
+      if (cause instanceof HttpError && cause.errorCode === 'AUTH_YOWYOB_IDENTITY_REMINDER_SENT') {
+        return { requiresIdentifier: true as const, message: cause.message };
+      }
+      throw cause;
+    }
 
     if (!discovery.contexts.length) {
       // discover-contexts renvoie une liste vide aussi bien pour un mauvais mot de passe que pour un
@@ -54,36 +73,49 @@ export async function POST(request: NextRequest) {
     const ctx = discovery.contexts[0];
     const orgs = ctx.organizations ?? [];
 
-    // Plusieurs organisations : étape « Choisir votre organisation » côté client.
-    // Le selectionToken KSM reste en Redis ; seul un pendingId opaque sort.
-    if (orgs.length > 1) {
-      const pendingId = await savePendingLogin(
-        { selectionToken: discovery.selectionToken, contextId: ctx.contextId, organizations: orgs },
-        discovery.expiresInSeconds,
-      );
-      return {
-        requiresOrgSelection: true as const,
-        pendingId,
-        organizations: orgs.map((o) => ({
-          organizationId: o.organizationId,
-          organizationCode: o.organizationCode,
-          displayName: orgDisplayName(o),
-        })),
-      };
-    }
-
-    // 0 org (lecteur de l'org partagée Yowyob Education) : contexte plateforme par défaut.
-    // 1 org : auto-sélection, validée nativement par KSM (validateOrganizationAccess).
+    // Organisation unique (Yowyob Education) : plus de sélection/switch d'org. On auto-sélectionne
+    // le premier contexte d'org disponible (0 org = contexte plateforme par défaut ; ≥1 = validé
+    // nativement par KSM via validateOrganizationAccess).
     const orgId = orgs[0]?.organizationId ?? undefined;
     let contextual = await authApi.selectContext(discovery.selectionToken, ctx.contextId, orgId);
     let session = buildSession(contextual);
 
-    // Compte SANS accès Yowyob Education (ni org EDU, ni rôle lecteur) : on ne tente aucune attribution
-    // au login (source de l'ancien 500). On propose de « Rejoindre » → invitation comme employé de
-    // l'org EDU (cf. /api/auth/login/join). Les comptes sont créés email-vérifié sur yowauth, donc
-    // aucune vérification email ici.
-    if (!hasEducationAccess(session)) {
-      const pendingId = await saveJoinPending({ email: session.user.email }, discovery.expiresInSeconds);
+    // Le login n'est autorisé que pour un membre ACTIF de l'org plateforme (invitation acceptée). Le
+    // rôle lecteur étant attribué dès l'invitation (statut PENDING), on ne peut PAS se fier au rôle :
+    // on résout le statut d'adhésion réel. Fail-open : si le lookup admin échoue (incident
+    // transitoire), on retombe sur la permission education pour ne pas verrouiller un membre légitime.
+    let isActiveMember: boolean;
+    try {
+      const admin = await getAdminSession();
+      const platformOrgId = admin ? await resolvePlatformOrganizationId() : null;
+      if (admin && platformOrgId) {
+        const members = await listEmployees(admin, platformOrgId);
+        const me = members.find((m) => m.userId === session.user.id);
+        isActiveMember = me ? me.status === 'ACTIVE' : false;
+      } else {
+        isActiveMember = hasEducationAccess(session);
+      }
+    } catch (cause) {
+      logger.error({ cause }, 'auth.login.membership_status_failed');
+      isActiveMember = hasEducationAccess(session);
+    }
+
+    // La gate d'adhésion ACTIVE ne concerne QUE les lecteurs (accès obtenu par invitation). Le staff
+    // plateforme (admin) et les éditeurs n'ont pas d'adhésion `employee_membership` — leur accès vient
+    // de rôles (SUPER_EDUCATION_SERVICES_MANAGER, EDUCATION_EDITOR_PERMISSIONS) → on les exempte, sinon
+    // ils seraient redirigés à tort vers « Rejoindre ».
+    const authorities = session.user.permissions ?? session.user.roles;
+    const isStaff = isPlatformAdmin(authorities) || isEducationEditor(authorities);
+
+    // Lecteur non-membre OU membre PENDING (invitation non acceptée) : on propose « Rejoindre ». Le
+    // clic (→ /api/auth/login/join) (r)émet l'invitation dans l'org EDU ; l'utilisateur active ensuite
+    // son accès via le lien reçu par email (PENDING→ACTIVE), puis se reconnecte. On ne renvoie qu'un
+    // pendingId opaque (l'email reste côté serveur, borné dans le temps).
+    if (!isStaff && !isActiveMember) {
+      // Inviter par le RECOVERY_EMAIL : KSM résout l'invité par cette adresse (l'email fourni à
+      // l'inscription), pas par `email` (= <username>@yowyob.com), sinon 404 EMPLOYEE_NOT_FOUND.
+      const inviteEmail = contextual.session.recoveryEmail ?? session.user.email;
+      const pendingId = await saveJoinPending({ email: inviteEmail }, discovery.expiresInSeconds);
       return { requiresJoin: true as const, pendingId, email: session.user.email };
     }
 
@@ -126,6 +158,7 @@ export async function POST(request: NextRequest) {
       await materializeServiceRoles(orgId);
     }
     // 0 org + accès EDU : lecteur de l'org partagée déjà provisionné → rien à faire.
+    // (Le statut ACTIVE a déjà été vérifié plus haut : seuls les membres actifs arrivent ici.)
 
     await writeSession(session);
 

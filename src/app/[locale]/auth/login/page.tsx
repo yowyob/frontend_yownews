@@ -9,48 +9,18 @@ import { AuthButton, SocialAuthButton } from '@/components/auth/AuthButton';
 import { isPlatformAdmin, isEducationEditor } from '@/lib/roles';
 
 type LoginResult = {
-  requiresOrgSelection?: boolean;
   requiresSignUp?: boolean;
+  // KSM ne reconnaît plus l'ancien email comme identifiant de connexion : il renvoie l'identifiant
+  // Yowyob (username) par email. `message` porte le texte KSM à afficher.
+  requiresIdentifier?: boolean;
+  // Compte existant mais pas encore membre : on propose « Rejoindre » (envoie l'invitation, qui
+  // attribue le rôle) ; il suffit ensuite de se reconnecter.
   requiresJoin?: boolean;
-  email?: string;
   pendingId?: string;
-  organizations?: { organizationId: string; organizationCode?: string; displayName: string }[];
+  message?: string;
+  email?: string;
   user?: { permissions?: string[]; roles: string[] };
 };
-
-type OrgSummary = { organizationId: string; code: string; displayName: string };
-
-type OrgLoginResult = {
-  requiresOrgSelection?: boolean;
-  requiresSubscription?: boolean;
-  pendingId?: string;
-  organizations?: OrgSummary[];
-  organization?: OrgSummary;
-  requiredServices?: readonly string[];
-};
-
-const SERVICE_LABELS: Record<string, string> = {
-  EDUCATION: 'Éducation (blogs, podcasts, cours)',
-  NEWSLETTER: 'Newsletter',
-  FORUM: 'Forum',
-};
-
-/**
- * Le pending de connexion a *réellement* expiré — le serveur le signale explicitement par
- * `LOGIN_EXPIRED`. Tester le seul statut 401 était trompeur : n'importe quel refus KSM en aval
- * (ex. lecture des services d'une organisation) était présenté comme une expiration de session et
- * renvoyait l'utilisateur au formulaire de connexion, masquant la cause réelle.
- */
-function isLoginExpired(err: unknown): boolean {
-  return err instanceof BffApiError && err.status === 401 && err.errorCode === 'LOGIN_EXPIRED';
-}
-
-/** Message du serveur quand il en fournit un — plus utile qu'un « une erreur est survenue » générique. */
-function errorMessage(err: unknown): string {
-  return err instanceof BffApiError && err.message
-    ? err.message
-    : 'Une erreur est survenue. Veuillez réessayer.';
-}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -63,26 +33,21 @@ export default function LoginPage() {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
 
-  // Étape « Rejoindre Yowyob Education » — compte existant mais pas encore membre de l'org EDU.
-  // « Rejoindre » l'invite comme employé (rôle lecteur) puis il se reconnecte.
+  // Étape « Identifiant Yowyob envoyé » — l'email n'est plus un identifiant de connexion ; KSM
+  // vient d'envoyer l'identifiant par email. On invite l'utilisateur à réessayer avec cet identifiant.
+  const [identifierNotice, setIdentifierNotice] = useState<string | null>(null);
+
+  // Étape « Rejoindre » — le compte existe mais ne fait pas encore partie de l'organisation.
+  // « Rejoindre » émet l'invitation (qui attribue le rôle) ; il suffit ensuite de se reconnecter.
   const [joinStep, setJoinStep] = useState<{ pendingId: string; email: string } | null>(null);
-  const [joinState, setJoinState] = useState<'idle' | 'joining' | 'joined' | 'error'>('idle');
-
-  // Étape « Choisir votre organisation » — login classique (multi-orgs sur le même compte).
-  const [orgStep, setOrgStep] = useState<{ pendingId: string; organizations: NonNullable<LoginResult['organizations']> } | null>(null);
-
-  // Étapes du login "mode organisation" (identifiants d'un owner, org potentiellement externe).
-  const [orgModeStep, setOrgModeStep] = useState<{ pendingId: string; organizations: OrgSummary[] } | null>(null);
-  const [subscribeStep, setSubscribeStep] = useState<{
-    pendingId: string;
-    organization: OrgSummary;
-    requiredServices: readonly string[];
-  } | null>(null);
+  const [joinState, setJoinState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   function validate() {
     const errs: typeof fieldErrors = {};
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      errs.email = 'Veuillez entrer une adresse email valide.';
+    // Le champ accepte un email OU un identifiant Yowyob (username) : on exige seulement un champ
+    // non vide (KSM tranche ensuite email/identifiant).
+    if (!email.trim()) {
+      errs.email = 'Veuillez entrer votre email ou identifiant Yowyob.';
     }
     if (password.length < 8) {
       errs.password = 'Le mot de passe doit comporter au moins 8 caractères.';
@@ -122,20 +87,23 @@ export default function LoginPage() {
     try {
       const res = await apiFetch<LoginResult>('/api/auth/login', {
         method: 'POST',
-        body: { email: email.trim().toLowerCase(), password },
+        body: { email: email.trim(), password },
       });
+      // L'email saisi n'est plus un identifiant de connexion : KSM a envoyé l'identifiant Yowyob
+      // par email → écran d'information (ne pas router vers l'inscription).
+      if (res.requiresIdentifier) {
+        setIdentifierNotice(res.message ?? null);
+        return;
+      }
       // Compte inexistant → page d'inscription (redirige ensuite vers le portail yowauth).
       if (res.requiresSignUp) {
         router.push('/auth/sign-up');
         return;
       }
-      // Compte existant mais pas encore membre de Yowyob Education → écran « Rejoindre ».
+      // Compte existant mais pas encore membre → écran « Rejoindre ».
       if (res.requiresJoin && res.pendingId) {
-        setJoinStep({ pendingId: res.pendingId, email: res.email ?? email.trim().toLowerCase() });
-        return;
-      }
-      if (res.requiresOrgSelection && res.pendingId && res.organizations?.length) {
-        setOrgStep({ pendingId: res.pendingId, organizations: res.organizations });
+        setJoinStep({ pendingId: res.pendingId, email: res.email ?? email.trim() });
+        setJoinState('idle');
         return;
       }
       await finishLogin(res);
@@ -144,8 +112,6 @@ export default function LoginPage() {
         setGlobalError('Trop de tentatives de connexion. Veuillez réessayer dans une minute.');
       } else if (err instanceof BffApiError && err.status === 401) {
         setGlobalError('Email ou mot de passe incorrect.');
-      } else if (err instanceof BffApiError && err.errorCode === 'NO_ORGANIZATION_ACCESS') {
-        setGlobalError("Ce compte n'est ni propriétaire ni employé d'aucune organisation.");
       } else {
         setGlobalError('Une erreur est survenue. Veuillez réessayer.');
       }
@@ -155,109 +121,13 @@ export default function LoginPage() {
   }
 
   async function handleJoin() {
-    if (!joinStep || joinState === 'joining') return;
-    setJoinState('joining');
+    if (!joinStep || joinState === 'sending') return;
+    setJoinState('sending');
     try {
       await apiFetch('/api/auth/login/join', { method: 'POST', body: { pendingId: joinStep.pendingId } });
-      setJoinState('joined');
+      setJoinState('sent');
     } catch {
       setJoinState('error');
-    }
-  }
-
-  async function handleSelectOrg(organizationId: string) {
-    if (!orgStep || loading) return;
-    setGlobalError(null);
-    setLoading(true);
-    try {
-      const res = await apiFetch<LoginResult>('/api/auth/login/select-org', {
-        method: 'POST',
-        body: { pendingId: orgStep.pendingId, organizationId },
-      });
-      await finishLogin(res);
-    } catch (err) {
-      if (isLoginExpired(err)) {
-        // pendingId expiré : retour à l'étape identifiants
-        setOrgStep(null);
-        setGlobalError('La session de connexion a expiré. Veuillez vous reconnecter.');
-      } else {
-        setGlobalError(errorMessage(err));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function finishOrgMode() {
-    await refresh();
-    // Mode organisation → dashboard de l'espace org (et non le landing public, qui ne redirige pas
-    // un connecté et laissait l'utilisateur sans navigation d'application).
-    router.push('/editor/dashboard');
-  }
-
-  async function handleOrgModeResult(res: OrgLoginResult) {
-    if (res.requiresOrgSelection && res.pendingId && res.organizations?.length) {
-      setOrgModeStep({ pendingId: res.pendingId, organizations: res.organizations });
-      setSubscribeStep(null);
-      return;
-    }
-    if (res.requiresSubscription && res.pendingId && res.organization) {
-      setSubscribeStep({
-        pendingId: res.pendingId,
-        organization: res.organization,
-        requiredServices: res.requiredServices ?? ['EDUCATION', 'NEWSLETTER', 'FORUM'],
-      });
-      setOrgModeStep(null);
-      return;
-    }
-    await finishOrgMode();
-  }
-
-  async function handleSelectOrgMode(organizationId: string) {
-    if (!orgModeStep || loading) return;
-    setGlobalError(null);
-    setLoading(true);
-    try {
-      const res = await apiFetch<OrgLoginResult>('/api/auth/login/organization/select', {
-        method: 'POST',
-        body: { pendingId: orgModeStep.pendingId, organizationId },
-      });
-      await handleOrgModeResult(res);
-    } catch (err) {
-      if (isLoginExpired(err)) {
-        setOrgModeStep(null);
-        setGlobalError('La session de connexion a expiré. Veuillez vous reconnecter.');
-      } else {
-        setGlobalError(errorMessage(err));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSubscribe(serviceCode: string) {
-    if (!subscribeStep || loading) return;
-    setGlobalError(null);
-    setLoading(true);
-    try {
-      const res = await apiFetch<OrgLoginResult>('/api/auth/login/organization/subscribe', {
-        method: 'POST',
-        body: {
-          pendingId: subscribeStep.pendingId,
-          organizationId: subscribeStep.organization.organizationId,
-          serviceCode,
-        },
-      });
-      await handleOrgModeResult(res);
-    } catch (err) {
-      if (isLoginExpired(err)) {
-        setSubscribeStep(null);
-        setGlobalError('La session de connexion a expiré. Veuillez vous reconnecter.');
-      } else {
-        setGlobalError(errorMessage(err));
-      }
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -266,106 +136,42 @@ export default function LoginPage() {
   const inputStyle = (hasError?: boolean) =>
     `${inputBase} ${hasError ? 'border-2 border-red-400 shadow-[0_0_0_4px_rgba(239,68,68,.08)]' : 'border-[1.5px] border-gray-200 focus:border-[#1F5FBF] focus:shadow-[0_0_0_4px_rgba(31,95,191,.08)]'}`;
 
-  // Étape « Choisir votre organisation » (mode organisation, plusieurs orgs possédées).
-  if (orgModeStep) {
+  // Étape « Identifiant Yowyob envoyé » — l'email n'est plus un identifiant de connexion ; KSM
+  // vient d'envoyer l'identifiant par email. On invite l'utilisateur à réessayer avec cet identifiant.
+  if (identifierNotice !== null) {
     return (
       <AuthLayout
-        headline={<>Connexion <span style={{ color: '#FF6B35' }}>Organisation</span></>}
-        sub="Connectez une organisation à votre espace créateur."
+        headline={<>Bienvenue sur <span style={{ color: '#FF6B35' }}>Yowyob Education</span></>}
+        sub="Connectez-vous avec votre identifiant Yowyob."
         showTestimonial={false}
       >
-        <div className="w-full max-w-[400px]">
-          {globalError && (
-            <div className="mb-4 px-4 py-3 rounded-[10px] bg-red-50 border border-red-200 text-sm text-red-600">
-              {globalError}
-            </div>
-          )}
-          <h2 className="font-display text-[24px] font-extrabold text-[#0F172A] mb-2">
-            Choisir votre organisation
-          </h2>
-          <p className="text-[15px] text-[#64748B] mb-6">
-            Ce compte possède plusieurs organisations. Sélectionnez celle à connecter.
-          </p>
-          <div className="flex flex-col gap-3" role="list" aria-label="Vos organisations">
-            {orgModeStep.organizations.map((org) => (
-              <button
-                key={org.organizationId}
-                type="button"
-                disabled={loading}
-                onClick={() => handleSelectOrgMode(org.organizationId)}
-                className="flex items-center gap-3 w-full text-left px-4 py-3.5 rounded-[10px] border-[1.5px] border-gray-200 bg-white hover:border-[#1F5FBF] hover:shadow-[0_0_0_4px_rgba(31,95,191,.08)] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
-              >
-                <span className="w-10 h-10 rounded-[9px] flex items-center justify-center font-display font-bold text-sm text-white shrink-0 bg-[#1F5FBF]">
-                  {org.displayName.slice(0, 2).toUpperCase()}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[15px] font-semibold text-[#0F172A] truncate">{org.displayName}</span>
-                  <span className="block text-xs text-[#64748B] truncate">{org.code}</span>
-                </span>
-              </button>
-            ))}
+        <div className="w-full max-w-[420px] text-center">
+          <div className="w-16 h-16 rounded-2xl bg-[#FFF3EC] border border-[#FF6B35]/20 flex items-center justify-center text-[#FF6B35] mb-6 shadow-sm mx-auto">
+            <svg width="30" height="30" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+              <path d="M22 6l-10 7L2 6" />
+            </svg>
           </div>
+          <h2 className="font-display text-[24px] font-extrabold text-[#0F172A] mb-3">Vérifiez votre boîte mail</h2>
+          <p className="text-sm text-[#64748B] mb-6 leading-relaxed">
+            {identifierNotice ||
+              "Cette adresse n'est plus un identifiant de connexion. Nous venons de vous envoyer votre identifiant Yowyob par email."}{' '}
+            Reconnectez-vous en saisissant cet <strong className="text-[#0F172A]">identifiant Yowyob</strong>.
+          </p>
           <button
             type="button"
-            onClick={() => { setOrgModeStep(null); setGlobalError(null); }}
-            className="mt-6 text-sm text-[#1F5FBF] font-medium hover:text-[#FF6B35] transition-colors"
+            onClick={() => { setIdentifierNotice(null); setEmail(''); setPassword(''); setGlobalError(null); }}
+            className="w-full py-3 px-6 rounded-[10px] font-display font-semibold text-sm text-white bg-[#FF6B35] hover:bg-[#E55A2B] transition-all duration-200"
           >
-            Utiliser un autre compte
+            Retour à la connexion
           </button>
         </div>
       </AuthLayout>
     );
   }
 
-  // Étape souscription (mode organisation, aucun module actif).
-  if (subscribeStep) {
-    return (
-      <AuthLayout
-        headline={<>Connexion <span style={{ color: '#FF6B35' }}>Organisation</span></>}
-        sub="Connectez une organisation à votre espace créateur."
-        showTestimonial={false}
-      >
-        <div className="w-full max-w-[400px]">
-          {globalError && (
-            <div className="mb-4 px-4 py-3 rounded-[10px] bg-red-50 border border-red-200 text-sm text-red-600">
-              {globalError}
-            </div>
-          )}
-          <h2 className="font-display text-[24px] font-extrabold text-[#0F172A] mb-2">
-            Activer un module pour {subscribeStep.organization.displayName}
-          </h2>
-          <p className="text-[15px] text-[#64748B] mb-6">
-            Cette organisation n&apos;a encore souscrit à aucun module. Choisissez celui à activer.
-          </p>
-          <div className="flex flex-col gap-3">
-            {subscribeStep.requiredServices.map((code) => (
-              <button
-                key={code}
-                type="button"
-                disabled={loading}
-                onClick={() => handleSubscribe(code)}
-                className="text-left px-4 py-3.5 rounded-[10px] border-[1.5px] border-gray-200 bg-white hover:border-[#1F5FBF] hover:shadow-[0_0_0_4px_rgba(31,95,191,.08)] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
-              >
-                <span className="block text-[15px] font-semibold text-[#0F172A]">
-                  {SERVICE_LABELS[code] ?? code}
-                </span>
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => { setSubscribeStep(null); setGlobalError(null); }}
-            className="mt-6 text-sm text-[#1F5FBF] font-medium hover:text-[#FF6B35] transition-colors"
-          >
-            Retour
-          </button>
-        </div>
-      </AuthLayout>
-    );
-  }
-
-  // Étape « Rejoindre Yowyob Education » — compte existant mais pas encore membre de l'org EDU.
-  // « Rejoindre » l'invite comme employé (rôle lecteur) ; il se reconnecte ensuite pour entrer.
+  // Étape « Rejoindre » — compte existant mais pas encore membre. « Rejoindre » émet l'invitation
+  // (qui attribue le rôle lecteur) ; il suffit ensuite de se reconnecter pour entrer.
   if (joinStep) {
     return (
       <AuthLayout
@@ -379,13 +185,16 @@ export default function LoginPage() {
               <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
             </svg>
           </div>
-          {joinState === 'joined' ? (
+          {joinState === 'sent' ? (
             <>
-              <h2 className="font-display text-[24px] font-extrabold text-[#0F172A] mb-3">Vous avez rejoint Yowyob Education 🎉</h2>
-              <p className="text-sm text-[#64748B] mb-6">Votre accès lecteur est actif. Reconnectez-vous pour accéder à la plateforme.</p>
+              <h2 className="font-display text-[24px] font-extrabold text-[#0F172A] mb-3">Invitation envoyée 🎉</h2>
+              <p className="text-sm text-[#64748B] mb-6 leading-relaxed">
+                Ouvrez le <strong className="text-[#0F172A]">lien d&apos;invitation reçu par email</strong> pour activer
+                votre accès, puis reconnectez-vous.
+              </p>
               <button
                 type="button"
-                onClick={() => { setJoinStep(null); setJoinState('idle'); setPassword(''); }}
+                onClick={() => { setJoinStep(null); setJoinState('idle'); setPassword(''); setGlobalError(null); }}
                 className="w-full py-3 px-6 rounded-[10px] font-display font-semibold text-sm text-white bg-[#FF6B35] hover:bg-[#E55A2B] transition-all duration-200"
               >
                 Se reconnecter
@@ -393,25 +202,24 @@ export default function LoginPage() {
             </>
           ) : (
             <>
-              <h2 className="font-display text-[24px] font-extrabold text-[#0F172A] mb-3">Nouveau sur Yowyob Education</h2>
+              <h2 className="font-display text-[24px] font-extrabold text-[#0F172A] mb-3">Rejoindre Yowyob Education</h2>
               <p className="text-sm text-[#64748B] mb-6 leading-relaxed">
-                Le compte <strong className="text-[#0F172A]">{joinStep.email}</strong> ne fait pas encore partie de
-                Yowyob Education. Cliquez sur <strong>Rejoindre</strong> pour rejoindre la communauté.
+                Le compte <strong className="text-[#0F172A]">{joinStep.email}</strong> n&apos;a pas encore
+                accès à Yowyob Education. Cliquez sur <strong>Rejoindre</strong> pour obtenir l&apos;accès.
               </p>
               <button
                 type="button"
                 onClick={handleJoin}
-                disabled={joinState === 'joining'}
+                disabled={joinState === 'sending'}
                 className="w-full py-3 px-6 rounded-[10px] font-display font-semibold text-sm text-white bg-[#FF6B35] hover:bg-[#E55A2B] disabled:opacity-60 transition-all duration-200"
               >
-                {joinState === 'joining' ? 'En cours…' : 'Rejoindre'}
+                {joinState === 'sending' ? 'En cours…' : 'Rejoindre'}
               </button>
               {joinState === 'error' && (
-                <p className="text-xs text-red-500 mt-2">Échec de l&apos;adhésion. Réessayez ou reconnectez-vous.</p>
+                <p className="text-xs text-red-500 mt-2">Échec. Réessayez ou reconnectez-vous.</p>
               )}
             </>
           )}
-
           <div className="mt-8 pt-6 border-t border-gray-100 w-full text-center">
             <button
               type="button"
@@ -438,53 +246,6 @@ export default function LoginPage() {
       showTestimonial={false}
     >
         <div className="w-full max-w-[400px]">
-          {orgStep ? (
-            <div>
-              <div className="mb-8">
-                <h2 className="font-display text-[28px] font-extrabold text-[#0F172A] mb-2">
-                  Choisir votre organisation
-                </h2>
-                <p className="text-[15px] text-[#64748B]">
-                  Votre compte est rattaché à plusieurs organisations. Sélectionnez celle avec laquelle vous souhaitez continuer.
-                </p>
-              </div>
-              {globalError && (
-                <div className="mb-4 px-4 py-3 rounded-[10px] bg-red-50 border border-red-200 text-sm text-red-600">
-                  {globalError}
-                </div>
-              )}
-              <div className="flex flex-col gap-3" role="list" aria-label="Vos organisations">
-                {orgStep.organizations.map((org) => (
-                  <button
-                    key={org.organizationId}
-                    type="button"
-                    disabled={loading}
-                    onClick={() => handleSelectOrg(org.organizationId)}
-                    className="flex items-center gap-3 w-full text-left px-4 py-3.5 rounded-[10px] border-[1.5px] border-gray-200 bg-white transition-all duration-200 hover:border-[#1F5FBF] hover:shadow-[0_0_0_4px_rgba(31,95,191,.08)] disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    <span className="w-10 h-10 rounded-[9px] flex items-center justify-center font-display font-bold text-sm text-white shrink-0 bg-[#1F5FBF]">
-                      {org.displayName.slice(0, 2).toUpperCase()}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[15px] font-semibold text-[#0F172A] truncate">{org.displayName}</span>
-                      {org.organizationCode && (
-                        <span className="block text-xs text-[#64748B] truncate">{org.organizationCode}</span>
-                      )}
-                    </span>
-                    <svg className="ml-auto shrink-0 text-gray-400" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => { setOrgStep(null); setGlobalError(null); }}
-                className="mt-6 text-sm text-[#1F5FBF] font-medium hover:text-[#FF6B35] transition-colors"
-              >
-               Utiliser un autre compte
-              </button>
-            </div>
-          ) : (
-          <>
           {/* Header */}
           <div className="mb-9">
             <h2 className="font-display text-[32px] font-extrabold text-[#0F172A] mb-2">
@@ -546,7 +307,7 @@ export default function LoginPage() {
             {/* Email */}
             <div className="mb-5">
               <label className="block font-display text-[13px] font-semibold text-[#0F172A] mb-2" htmlFor="email">
-                Adresse email
+                Email ou identifiant Yowyob
               </label>
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
@@ -557,12 +318,12 @@ export default function LoginPage() {
                 </span>
                 <input
                   id="email"
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: undefined })); }}
                   onBlur={handleBlurEmail}
-                  placeholder="votre@email.com"
-                  autoComplete="email"
+                  placeholder="votre@email.com ou identifiant Yowyob"
+                  autoComplete="username"
                   required
                   aria-required="true"
                   aria-describedby={fieldErrors.email ? 'email-error' : undefined}
@@ -660,8 +421,6 @@ export default function LoginPage() {
             et notre{' '}
             <a href="#" className="text-gray-500 underline hover:text-[#1F5FBF] transition-colors">Politique de confidentialité</a>.
           </p>
-          </>
-          )}
         </div>
     </AuthLayout>
   );

@@ -7,6 +7,10 @@ export const serverEnv = {
   KSM_PLATFORM_ORG_CODE: process.env.KSM_PLATFORM_ORG_CODE ?? 'YOWYOB_EDU',
   // Compte admin Yowyob Education utilisé côté serveur pour poser le rôle Lecteur aux nouveaux inscrits
   // (l'admin a déjà administration:assignments:write). Jamais exposé au client.
+  // Depuis le rebuild KSM, l'email n'est plus un identifiant de connexion : on se connecte par
+  // USERNAME (KSM_PLATFORM_ADMIN_USERNAME, émis par le bootstrap). L'email n'est conservé qu'en repli
+  // s'il est déjà un identifiant valide (username ou @yowyob.com) — cf. getAdminSession.
+  KSM_PLATFORM_ADMIN_USERNAME: process.env.KSM_PLATFORM_ADMIN_USERNAME ?? '',
   KSM_PLATFORM_ADMIN_EMAIL:    process.env.KSM_PLATFORM_ADMIN_EMAIL    ?? 'admin@yowyob-edu.com',
   KSM_PLATFORM_ADMIN_PASSWORD: process.env.KSM_PLATFORM_ADMIN_PASSWORD ?? '',
   SESSION_SECRET:       process.env.SESSION_SECRET        ?? 'fallback-secret-do-not-use-in-production-12345678',

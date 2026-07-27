@@ -11,6 +11,10 @@ export default async function ReaderLayout({ children }: { children: React.React
   const session = await readSession();
   if (!session) redirect('/auth/login');
 
+  // Note : la gate d'adhésion ACTIVE est appliquée au LOGIN (route /api/auth/login) — un membre
+  // non actif (PENDING) n'obtient pas de session, donc n'atteint jamais l'espace lecteur. Rien à
+  // gater de plus ici.
+
   const clientSession: ClientSession = {
     user: session.user,
     workspace: session.workspace,

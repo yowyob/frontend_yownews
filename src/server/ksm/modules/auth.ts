@@ -45,6 +45,10 @@ export type KsmLoginSession = {
   actorId: string;
   username: string;
   email: string;
+  // Adresse de récupération = l'email fourni à l'inscription (≠ `email` qui vaut <username>@yowyob.com
+  // depuis le rebuild KSM). C'est CETTE valeur que KSM résout pour inviter un employé
+  // (findByRecoveryEmailGlobal) — nécessaire pour l'invitation « Rejoindre ».
+  recoveryEmail?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   authProvider: string;

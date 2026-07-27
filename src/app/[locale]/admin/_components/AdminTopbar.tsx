@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { useSessionUser } from '@/components/providers/session-provider';
 import UserAvatar from '@/components/ui/UserAvatar';
-import OrgSwitcher from './OrgSwitcher';
 
 type Variant = 'admin' | 'editor' | 'reader';
 
@@ -149,11 +148,6 @@ export default function AdminTopbar({ displayName, variant = 'admin', mockMode =
           );
         })}
       </nav>
-
-      {/* Organisation active — switch sans re-login (même token, X-Organization-Id change côté
-          BFF). Badge statique si une seule org accessible, invisible si aucune (ex. lecteur
-          freelance sans organisation). */}
-      <OrgSwitcher />
 
       {/* Sélecteur de rôle démo — MOCK_MODE uniquement : bascule la session factice entre les
           3 personas (admin/rédacteur/lecteur) pour prévisualiser chaque sidebar/espace. */}

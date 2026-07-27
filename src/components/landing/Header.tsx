@@ -23,7 +23,6 @@ export function Header() {
         <div className="lv-nav-links">
           <Link href="/public/blogs">Blogs</Link>
           <Link href="/public/podcasts">Podcasts</Link>
-          <Link href="/public/cours">Cours</Link>
           <Link href="/#features">À propos</Link>
         </div>
         <div className="lv-nav-cta">

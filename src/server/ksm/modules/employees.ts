@@ -71,6 +71,26 @@ export function inviteEmployee(session: AppSession, organizationId: string, inpu
   );
 }
 
+/**
+ * Accepte une invitation à partir de son token (celui du lien reçu par email) → l'adhésion passe
+ * PENDING → ACTIVE. Endpoint KSM existant : `POST /api/employees/invitations/accept`. Il n'exige PAS
+ * de bearer utilisateur (le token est la preuve), mais réclame le contexte client + `X-Tenant-Id`
+ * **et** `X-Organization-Id` (endpoint « organization-scoped business service ») — fournis en clair
+ * ici puisque l'appel est non authentifié (callKsm n'injecte le contexte org que pour une session).
+ */
+export function acceptInvitation(tenantId: string, organizationId: string, token: string) {
+  return callKsm<EmployeeMembershipResponse>(
+    '/api/employees/invitations/accept',
+    {
+      method: 'POST',
+      body: { token },
+      authenticated: false,
+      headers: { 'X-Tenant-Id': tenantId, 'X-Organization-Id': organizationId },
+    },
+    {},
+  );
+}
+
 /** Retire un employé de l'organisation. */
 export function removeEmployee(session: AppSession, organizationId: string, membershipId: string) {
   return callKsm<void>(

@@ -9,8 +9,9 @@ import { inviteEmployee } from '@/server/ksm/modules/employees';
 import { logger } from '@/server/logger';
 
 // POST /api/auth/login/join { pendingId } — « Rejoindre Yowyob Education ».
-// Invite le compte comme EMPLOYÉ de l'org plateforme (rôle lecteur), via l'identité admin (owner de
-// l'org). L'org apparaît alors dans ses organisations → à la reconnexion il entre normalement.
+// Émet une invitation dans l'org plateforme (via l'identité admin, propriétaire de l'org) : KSM crée
+// l'adhésion et attribue immédiatement le rôle lecteur, puis envoie un email. Il suffit ensuite à
+// l'utilisateur de se reconnecter — l'org apparaît alors dans ses accès et il entre.
 export async function POST(request: NextRequest) {
   return handleRoute(async () => {
     const body = (await request.json()) as { pendingId?: string };
@@ -34,14 +35,14 @@ export async function POST(request: NextRequest) {
     try {
       await inviteEmployee(admin, eduOrgId, { email: pending.email, roleId: readerRoleId });
     } catch (err) {
-      // Déjà employé (409) → succès idempotent : le compte fait déjà partie de l'org.
+      // Déjà invité/membre (409) → succès idempotent : l'accès est déjà en place.
       if (err instanceof HttpError && err.status === 409) {
-        return { joined: true as const };
+        return { invited: true as const };
       }
       logger.error({ err, email: pending.email }, 'auth.login.join_failed');
       throw err;
     }
 
-    return { joined: true as const };
+    return { invited: true as const };
   });
 }

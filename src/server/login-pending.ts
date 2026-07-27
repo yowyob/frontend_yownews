@@ -3,42 +3,9 @@ import { redis } from '@/server/redis';
 import type { AppSession } from '@/lib/types/auth';
 import type { ContextualLoginResponse, UserOrganizationAccess } from '@/server/ksm/modules/auth';
 
-/**
- * Login en 2 temps : quand le compte a plusieurs organisations, le selectionToken
- * KSM reste côté serveur (Redis) et le navigateur ne reçoit qu'un pendingId opaque
- * + la liste des orgs DU user (celles renvoyées par discover-contexts, jamais d'autres).
- */
-
-export type PendingLogin = {
-  selectionToken: string;
-  contextId: string;
-  organizations: UserOrganizationAccess[];
-};
-
-const key = (id: string) => `app:login:pending:${id}`;
-
-export async function savePendingLogin(pending: PendingLogin, ttlSeconds: number): Promise<string> {
-  const id = crypto.randomUUID();
-  // Borne le TTL : jamais plus long que la validité du selectionToken KSM.
-  const ttl = Math.max(30, Math.min(ttlSeconds, 300));
-  await redis().set(key(id), JSON.stringify(pending), 'EX', ttl);
-  return id;
-}
-
-export async function takePendingLogin(id: string): Promise<PendingLogin | null> {
-  const raw = await redis().get(key(id));
-  if (!raw) return null;
-  await redis().del(key(id));
-  try {
-    return JSON.parse(raw) as PendingLogin;
-  } catch {
-    return null;
-  }
-}
-
-// ── Pending « Rejoindre Yowyob Education » ────────────────────────────────────
-// Après un login d'un compte non-membre EDU, on ne renvoie qu'un pendingId opaque ; l'email (nécessaire
-// à l'invitation employé) reste côté serveur, borné dans le temps.
+// Organisation unique + accès sur invitation : plus de login en 2 temps (sélection d'org). On garde
+// un pending « Rejoindre » : après un login d'un compte non-membre, on ne renvoie qu'un pendingId
+// opaque ; l'email (nécessaire pour émettre l'invitation) reste côté serveur, borné dans le temps.
 export type PendingJoin = { email: string };
 const joinKey = (id: string) => `app:login:join:${id}`;
 
