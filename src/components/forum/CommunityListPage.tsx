@@ -79,7 +79,7 @@ export default function CommunityListPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <h1 style={{ fontFamily: 'var(--font-d)', fontSize: '24px', fontWeight: 800, margin: 0 }}>Communautés</h1>
         <button type="button" onClick={() => { setShowForm((v) => !v); setMessage(null); }} style={{ border: 'none', borderRadius: '8px', padding: '8px 16px', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>
-          {showForm ? 'Annuler' : '+ Proposer une communauté'}
+          {showForm ? 'Annuler' : '+ Créer une communauté'}
         </button>
       </div>
 
@@ -89,7 +89,7 @@ export default function CommunityListPage() {
 
       {showForm && (
         <div style={{ background: '#fff', border: '1px solid var(--gray-200)', borderRadius: '12px', padding: '18px', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700 }}>Proposer une nouvelle communauté</h3>
+          <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700 }}>Créer une nouvelle communauté</h3>
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nom de la communauté *" style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '8px 12px', fontSize: '14px' }} />
           <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Description (optionnelle)" style={{ border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '8px 12px', fontSize: '14px' }} />
           <p style={{ margin: 0, fontSize: '12px', color: 'var(--gray-400)' }}>

@@ -3,25 +3,13 @@ import type { NextRequest } from 'next/server';
 import { handleRoute, fail } from '@/server/api-response';
 import { readSession } from '@/server/session';
 import * as forumApi from '@/server/ksm/modules/forum';
-import { getAdminSession } from '@/server/ksm/admin-session';
-import { listTenantUsers } from '@/server/ksm/modules/administration';
-import { logger } from '@/server/logger';
+import { resolveUserNames } from '@/server/ksm/user-names';
 
-// Résout le nom d'affichage d'un utilisateur à partir de son id (join actor_id → vrais firstName/
-// lastName via l'admin), pour le figer dans `creatorName` à la création. Best-effort : null si la
-// session admin ou le lookup échoue (l'appelant ne bloque pas la création).
+// Résout le nom d'affichage d'un utilisateur pour le figer dans `creatorName` à la création.
+// Best-effort : undefined si la résolution échoue (l'appelant ne bloque pas la création).
 async function resolveCreatorName(userId: string): Promise<string | undefined> {
-  try {
-    const admin = await getAdminSession();
-    if (!admin) return undefined;
-    const users = await listTenantUsers(admin);
-    const u = users.find((x) => x.userId === userId);
-    if (!u) return undefined;
-    return [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.username || undefined;
-  } catch (cause) {
-    logger.error({ cause, userId }, 'forum.create.resolve_creator_name_failed');
-    return undefined;
-  }
+  const names = await resolveUserNames([userId]);
+  return names.get(userId) ?? undefined;
 }
 
 // GET /api/forum/groups — groupes publics (VALIDATED)

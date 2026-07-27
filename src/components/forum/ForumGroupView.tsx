@@ -12,7 +12,8 @@ type ForumPost = {
 };
 type ForumCommentaire = { commentaireId?: string | null; content: string; authorId: string; authorName?: string | null; creationDate?: string | null };
 type ForumCategorie = { categorieId: string; categorieName: string };
-type DiscussionGroup = { groupId: string; name: string; description?: string | null; type?: string; members?: string[] | null; creatorId?: string | null; parentCommunityId?: string | null };
+type MemberName = { userId: string; userName?: string | null };
+type DiscussionGroup = { groupId: string; name: string; description?: string | null; type?: string; members?: string[] | null; memberNames?: MemberName[] | null; creatorId?: string | null; parentCommunityId?: string | null };
 type JoinRequest = { requestId: string; userId: string; userName?: string | null; status?: string | null; createdAt?: string | null };
 
 function formatDate(s?: string | null) {
@@ -148,16 +149,25 @@ function sortByDateAsc(posts: ForumPost[]): ForumPost[] {
   });
 }
 
-// Panneau de gestion des demandes d'adhésion — affiché uniquement au créateur d'une COMMUNITY.
-// Approuver = ajout dans `members` côté KSM (approveJoinRequest) ; rejeter = clôture de la demande.
-function JoinRequestsPanel({ groupId, onApproved }: { groupId: string; onApproved: () => void }) {
+// Panneau de gestion des adhésions — affiché uniquement au créateur d'une COMMUNITY.
+// TOUJOURS visible (états chargement / erreur / vide / liste) pour que le créateur dispose d'une
+// interface même sans demande en attente. Approuver = ajout dans `members` côté KSM ; rejeter = clôture.
+function JoinRequestsPanel({ groupId, members, onApproved }: { groupId: string; members: MemberName[]; onApproved: () => void }) {
   const [requests, setRequests] = useState<JoinRequest[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
-    apiFetch<JoinRequest[]>(`/api/forum/groups/${groupId}/requests`)
-      .then((d) => setRequests(Array.isArray(d) ? d : []))
-      .catch(() => setRequests([]));
+    let cancelled = false;
+    (async () => {
+      try {
+        const d = await apiFetch<JoinRequest[]>(`/api/forum/groups/${groupId}/requests`);
+        if (!cancelled) { setRequests(Array.isArray(d) ? d : []); setLoadError(false); }
+      } catch {
+        if (!cancelled) { setRequests([]); setLoadError(true); }
+      }
+    })();
+    return () => { cancelled = true; };
   }, [groupId]);
 
   const act = async (requestId: string, action: 'approve' | 'reject') => {
@@ -171,21 +181,43 @@ function JoinRequestsPanel({ groupId, onApproved }: { groupId: string; onApprove
   };
 
   const pending = (requests ?? []).filter((r) => !r.status || r.status === 'PENDING');
-  if (requests === null || pending.length === 0) return null;
 
   return (
     <div style={{ background: '#fff', border: '1px solid var(--gray-200)', borderRadius: '12px', padding: '16px 18px', marginBottom: '20px' }}>
-      <h3 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 700 }}>Demandes d&apos;adhésion ({pending.length})</h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {pending.map((r) => (
-          <div key={r.requestId} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', border: '1px solid var(--gray-100)', borderRadius: '8px' }}>
-            <UserAvatar name={r.userName || 'Utilisateur'} userId={r.userId} size={28} fontSize={11} />
-            <span style={{ flex: 1, minWidth: 0, fontSize: '13px', color: 'var(--gray-700)' }}>{r.userName || 'Utilisateur'}</span>
-            <button type="button" disabled={busyId === r.requestId} onClick={() => act(r.requestId, 'approve')} style={{ border: 'none', borderRadius: '7px', padding: '6px 12px', background: 'var(--accent)', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', opacity: busyId === r.requestId ? 0.5 : 1 }}>Approuver</button>
-            <button type="button" disabled={busyId === r.requestId} onClick={() => act(r.requestId, 'reject')} style={{ border: '1px solid var(--gray-200)', borderRadius: '7px', padding: '6px 12px', background: '#fff', color: 'var(--gray-600)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: busyId === r.requestId ? 0.5 : 1 }}>Rejeter</button>
-          </div>
-        ))}
-      </div>
+      <h3 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 700 }}>Demandes d&apos;adhésion{pending.length > 0 ? ` (${pending.length})` : ''}</h3>
+      {requests === null ? (
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--gray-400)' }}>Chargement…</p>
+      ) : loadError ? (
+        <p style={{ margin: 0, fontSize: '13px', color: '#B91C1C' }}>Impossible de charger les demandes. Rechargez la page.</p>
+      ) : pending.length === 0 ? (
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--gray-400)' }}>Aucune demande en attente.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {pending.map((r) => (
+            <div key={r.requestId} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', border: '1px solid var(--gray-100)', borderRadius: '8px' }}>
+              <UserAvatar name={r.userName || 'Utilisateur'} userId={r.userId} size={28} fontSize={11} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: '13px', color: 'var(--gray-700)' }}>{r.userName || 'Utilisateur'}</span>
+              <button type="button" disabled={busyId === r.requestId} onClick={() => act(r.requestId, 'approve')} style={{ border: 'none', borderRadius: '7px', padding: '6px 12px', background: 'var(--accent)', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', opacity: busyId === r.requestId ? 0.5 : 1 }}>Approuver</button>
+              <button type="button" disabled={busyId === r.requestId} onClick={() => act(r.requestId, 'reject')} style={{ border: '1px solid var(--gray-200)', borderRadius: '7px', padding: '6px 12px', background: '#fff', color: 'var(--gray-600)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: busyId === r.requestId ? 0.5 : 1 }}>Rejeter</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Membres actuels de la communauté */}
+      <h4 style={{ margin: '16px 0 8px', fontSize: '13px', fontWeight: 700, color: 'var(--gray-600)' }}>Membres ({members.length})</h4>
+      {members.length === 0 ? (
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--gray-400)' }}>Aucun membre pour le moment.</p>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {members.map((m) => (
+            <div key={m.userId} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 10px 5px 6px', border: '1px solid var(--gray-100)', borderRadius: '20px' }}>
+              <UserAvatar name={m.userName || 'Utilisateur'} userId={m.userId} size={22} fontSize={9} />
+              <span style={{ fontSize: '12px', color: 'var(--gray-700)' }}>{m.userName || 'Utilisateur'}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -210,6 +242,27 @@ function CommunityView({ group, userId }: { group: DiscussionGroup; userId?: str
       .catch(() => setForums([]));
   };
   useEffect(() => { loadForums(); }, [group.groupId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persistance de l'état « Demande envoyée » : la demande vit côté KSM, pas dans ce composant.
+  // Pour un non-membre, on interroge les demandes du groupe au montage ; si l'utilisateur y figure,
+  // on repositionne joinState='requested' (sinon le bouton « Demander à rejoindre » réapparaîtrait
+  // après chaque rechargement/reconnexion).
+  useEffect(() => {
+    if (isMember || !userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const reqs = await apiFetch<JoinRequest[]>(`/api/forum/groups/${group.groupId}/requests`);
+        if (!cancelled && Array.isArray(reqs) && reqs.some((r) => r.userId === userId && (!r.status || r.status === 'PENDING'))) {
+          setJoinState('requested');
+        }
+      } catch { /* état par défaut 'idle' */ }
+    })();
+    return () => { cancelled = true; };
+  }, [group.groupId, isMember, userId]);
+
+  // Membres à afficher au créateur : noms résolus par le BFF (memberNames) ou repli sur les UUID.
+  const memberList: MemberName[] = group.memberNames ?? (group.members ?? []).map((uid) => ({ userId: uid }));
 
   const requestToJoin = async () => {
     try {
@@ -255,7 +308,7 @@ function CommunityView({ group, userId }: { group: DiscussionGroup; userId?: str
       )}
 
       {/* Gestion (créateur) : demandes d'adhésion + ajout de forums */}
-      {isCreator && <JoinRequestsPanel groupId={group.groupId} onApproved={() => { /* l'adhésion est côté KSM */ }} />}
+      {isCreator && <JoinRequestsPanel groupId={group.groupId} members={memberList} onApproved={() => { /* l'adhésion est côté KSM */ }} />}
       {isCreator && (
         <div style={{ marginBottom: '18px' }}>
           {showForm ? (
@@ -326,6 +379,22 @@ function ForumThread({ group, userId }: { group: DiscussionGroup; userId?: strin
   // Forum enfant : accès hérité de la communauté parente. Forum autonome : ouvert.
   const isMemberOfParent = !!parent && !!userId && (parent.creatorId === userId || (parent.members ?? []).includes(userId));
   const locked = !!parentId && !isMemberOfParent;
+
+  // Persistance de « Demande envoyée » sur un forum enfant : la demande porte sur la communauté
+  // parente. Si l'utilisateur a déjà une demande en attente, on repositionne joinState au montage.
+  useEffect(() => {
+    if (!parentId || isMemberOfParent || !userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const reqs = await apiFetch<JoinRequest[]>(`/api/forum/groups/${parentId}/requests`);
+        if (!cancelled && Array.isArray(reqs) && reqs.some((r) => r.userId === userId && (!r.status || r.status === 'PENDING'))) {
+          setJoinState('requested');
+        }
+      } catch { /* état par défaut 'idle' */ }
+    })();
+    return () => { cancelled = true; };
+  }, [parentId, isMemberOfParent, userId]);
 
   const requestToJoinParent = async () => {
     if (!parentId) return;
