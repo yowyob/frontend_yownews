@@ -17,3 +17,15 @@ export function getStoredFile(session: AppSession, fileId: string) {
     { session },
   );
 }
+
+export type StoredFileResponse = { id: string; fileName: string; contentType: string; size: number };
+
+/** Téléverse un fichier générique (multipart, champ `file`) via file-core. Renvoie son id, utilisable
+ *  ensuite comme `photoId` (ex. photo de profil employé, cf. `updateEmployeePhoto`). */
+export function uploadFile(session: AppSession, formData: FormData) {
+  return callKsm<StoredFileResponse>(
+    '/api/files',
+    { method: 'POST', body: formData },
+    { session },
+  );
+}

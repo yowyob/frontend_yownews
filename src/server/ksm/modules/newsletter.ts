@@ -221,8 +221,28 @@ export async function rejectNewsletter(session: AppSession, id: string) {
   return readRaw<NewsletterEntity>(res);
 }
 
-export async function deleteNewsletter(session: AppSession, id: string) {
+// Modération admin : supprime n'importe quelle publication (tenant vérifié côté backend).
+export async function deleteNewsletterAsAdmin(session: AppSession, id: string) {
   await callKsm<Response>(`/api/v1/newsletter/admin/newsletters/${id}`, { method: 'DELETE', raw: true }, { session });
+}
+
+// Self-service rédacteur : supprime SA PROPRE publication (auteur + tenant vérifiés côté backend,
+// userId résolu depuis le JWT — jamais transmis par le client).
+export async function deleteOwnNewsletter(session: AppSession, id: string) {
+  await callKsm<Response>(`/api/v1/newsletter/newsletters/${id}`, { method: 'DELETE', raw: true }, { session });
+}
+
+// Abonnés d'une newsletter = qui recevrait un e-mail au prochain contenu publié (union
+// catégories + suiveurs du rédacteur + abonnés directs). Self-service : uniquement SA newsletter.
+export async function listMySubscribers(session: AppSession, id: string) {
+  const res = await callKsm<Response>(`/api/v1/newsletter/newsletters/${id}/subscribers`, { method: 'GET', raw: true }, { session });
+  return readRaw<string[]>(res);
+}
+
+// Modération admin : abonnés de n'importe quelle newsletter.
+export async function listSubscribersAsAdmin(session: AppSession, id: string) {
+  const res = await callKsm<Response>(`/api/v1/newsletter/admin/newsletters/${id}/subscribers`, { method: 'GET', raw: true }, { session });
+  return readRaw<string[]>(res);
 }
 
 // ── Contenus d'une publication (rédaction) ──
@@ -309,6 +329,31 @@ export async function subscribeRedacteur(session: AppSession, userId: string, re
 export async function unsubscribeRedacteur(session: AppSession, userId: string, redacteurId: string) {
   if (serverEnv.MOCK_MODE) return;
   await callKsm<Response>(`/api/v1/newsletter/redacteurs/${redacteurId}/subscribe?userId=${userId}`, { method: 'DELETE', raw: true }, { session });
+}
+
+// ── Abonnement direct à UNE newsletter précise (ne couvre que celle-ci, contrairement au suivi
+// d'un rédacteur qui couvre automatiquement toutes ses newsletters — cf. onglet Newsletter du
+// profil public). userId résolu côté KSM depuis le JWT, jamais transmis par le client.
+export async function subscribeToNewsletter(session: AppSession, newsletterId: string, email: string) {
+  if (serverEnv.MOCK_MODE) return;
+  await callKsm<Response>(
+    `/api/v1/newsletter/newsletters/${newsletterId}/subscribe`,
+    { method: 'POST', body: { email }, raw: true },
+    { session },
+  );
+}
+
+export async function unsubscribeFromNewsletter(session: AppSession, newsletterId: string) {
+  if (serverEnv.MOCK_MODE) return;
+  await callKsm<Response>(`/api/v1/newsletter/newsletters/${newsletterId}/subscribe`, { method: 'DELETE', raw: true }, { session });
+}
+
+// Newsletters auxquelles le lecteur connecté est directement abonné (pour cocher l'état côté UI).
+export async function listMySubscribedNewsletterIds(session: AppSession) {
+  if (serverEnv.MOCK_MODE) return [] as string[];
+  const res = await callKsm<Response>('/api/v1/newsletter/newsletters/subscriptions', { method: 'GET', raw: true }, { session });
+  const newsletters = await readRaw<NewsletterEntity[]>(res);
+  return newsletters.map((n) => n.id);
 }
 
 export type FollowedRedacteurEntity = { id: string; email: string; nom: string; prenom: string };

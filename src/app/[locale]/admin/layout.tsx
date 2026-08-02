@@ -16,6 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     user: session.user,
     workspace: session.workspace,
     forcePasswordChange: session.forcePasswordChange ?? false,
+    termsConsent: session.termsConsent,
     expiresAt: session.expiresAt,
   };
 

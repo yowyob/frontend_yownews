@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import RowMenu, { type MenuItem } from '@/components/education/RowMenu';
+import { useConfirm } from '@/components/ui/useConfirm';
 
 type ForumStatus = 'PENDING' | 'VALIDATED' | 'REJECTED';
 type GroupType = 'FORUM' | 'COMMUNITY';
@@ -106,6 +107,7 @@ export default function ForumModerationWorkspace({ kind = 'forum' }: { kind?: 'f
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingGroup, setEditingGroup] = useState<DiscussionGroup | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const load = useCallback(async () => {
     setItems(null);
@@ -132,7 +134,7 @@ export default function ForumModerationWorkspace({ kind = 'forum' }: { kind?: 'f
   };
 
   const remove = async (groupId: string) => {
-    if (!window.confirm('Supprimer définitivement ce forum et tout son contenu ?')) return;
+    if (!(await confirm('Supprimer définitivement ce forum et tout son contenu ?'))) return;
     setBusyId(groupId); setError(null);
     try {
       await apiFetch(`/api/forum/groups/${groupId}`, { method: 'DELETE' });
@@ -157,6 +159,7 @@ export default function ForumModerationWorkspace({ kind = 'forum' }: { kind?: 'f
 
   return (
     <div>
+      {ConfirmDialog}
       <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '20px', fontWeight: 800, marginBottom: '16px' }}>{isCommunity ? 'Gestion des communautés' : 'Gestion des forums'}</h2>
 
       {error && <div style={{ padding: '10px 14px', background: '#FEF2F2', color: '#DC2626', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>{error}</div>}

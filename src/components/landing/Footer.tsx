@@ -38,6 +38,14 @@ export function Footer() {
               <li><Link href="/auth/login">Se connecter</Link></li>
             </ul>
           </div>
+          <div>
+            <h4>Légal</h4>
+            <ul>
+              <li><Link href="/legal/cgu">Conditions d&apos;utilisation</Link></li>
+              <li><Link href="/legal/privacy">Politique de confidentialité</Link></li>
+              <li><Link href="/legal/cookies">Cookies &amp; publicité</Link></li>
+            </ul>
+          </div>
         </div>
         <div className="bot">© 2025 Yowyob Education.</div>
       </div>

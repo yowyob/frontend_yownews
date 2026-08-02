@@ -5,8 +5,9 @@ import { handleRoute, fail } from '@/server/api-response';
 import * as authApi from '@/server/ksm/modules/auth';
 import { writeSession } from '@/server/session';
 import { buildSession, saveJoinPending } from '@/server/login-pending';
+import { getTermsConsent } from '@/server/terms-consent';
 import { ensureOrgServicesSubscribed } from '@/server/ksm/freelance-org';
-import { ensureServiceRolesSelf, getAdminSession, type EntitlementLevel } from '@/server/ksm/admin-session';
+import { promoteToEditorOnPlatformOrg, getAdminSession } from '@/server/ksm/admin-session';
 import { resolvePlatformOrganizationId } from '@/server/ksm/platform-org';
 import { listEmployees } from '@/server/ksm/modules/employees';
 import { getMyApplication } from '@/server/ksm/modules/editor-applications';
@@ -137,28 +138,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Matérialise, sur l'org de l'utilisateur (owner de son org), les rôles de service de son niveau
-    // (lecteur, ou rédacteur si candidature approuvée). Cf. docs/service-role-provisioning.md.
-    async function materializeServiceRoles(targetOrgId: string): Promise<void> {
-      let level: EntitlementLevel = 'reader';
-      try {
-        const application = await getMyApplication(session);
-        if (application?.status === 'APPROVED') level = 'editor';
-      } catch (cause) {
-        logger.error({ cause }, 'auth.login.entitlement_level_failed');
-      }
-      const changed = await ensureServiceRolesSelf(session, targetOrgId, level);
-      if (changed) await freshLogin(targetOrgId);
+    // Souscription aux services d'une org (mode organisation) : sans rapport avec la logique de
+    // rôle ci-dessous, ne concerne que les comptes qui activent une organisation externe.
+    if (orgId) {
+      await ensureOrgServicesSubscribed(session, orgId, orgs[0]?.services ?? []);
     }
 
-    if (orgId) {
-      // Membre EDU disposant d'une org : auto-répare une souscription services incomplète, puis
-      // matérialise les rôles de service manquants (self-heal + bascule lecteur→rédacteur).
-      await ensureOrgServicesSubscribed(session, orgId, orgs[0]?.services ?? []);
-      await materializeServiceRoles(orgId);
+    // Bascule Lecteur→Rédacteur : mécanisme unique — invitation dans l'org Yowyob Education (déjà
+    // vérifiée plus haut via isActiveMember) → candidature → approbation par l'admin (owner) →
+    // attribution du rôle PAR l'admin, jamais par auto-attribution de l'utilisateur. L'ancien
+    // modèle ("self-service, propriétaire de sa propre org") est abandonné : peu importe qu'un
+    // compte possède par ailleurs une autre organisation ou non, seule son appartenance "employé"
+    // à Yowyob Education compte ici. Cf. promoteToEditorOnPlatformOrg.
+    try {
+      const application = await getMyApplication(session);
+      if (application?.status === 'APPROVED') {
+        const admin = await getAdminSession();
+        if (admin) {
+          const promoted = await promoteToEditorOnPlatformOrg(admin, session.user.id);
+          if (promoted) await freshLogin();
+        }
+      }
+    } catch (cause) {
+      logger.error({ cause }, 'auth.login.editor_promotion_failed');
     }
-    // 0 org + accès EDU : lecteur de l'org partagée déjà provisionné → rien à faire.
-    // (Le statut ACTIVE a déjà été vérifié plus haut : seuls les membres actifs arrivent ici.)
+
+    // Rattache la preuve de consentement enregistrée au clic sur « Rejoindre » (même résolution
+    // d'email que saveJoinPending, cf. plus haut). Absente pour le staff (jamais passé par ce gate) :
+    // simple enrichissement informatif, ne bloque pas le login.
+    try {
+      const consentEmail = contextual.session.recoveryEmail ?? session.user.email;
+      const termsConsent = await getTermsConsent(consentEmail);
+      if (termsConsent) session.termsConsent = termsConsent;
+    } catch (cause) {
+      logger.error({ cause }, 'auth.login.terms_consent_lookup_failed');
+    }
 
     await writeSession(session);
 

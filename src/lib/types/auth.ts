@@ -34,6 +34,13 @@ export interface AccessibleOrganization {
   services?: string[];
 }
 
+/** Preuve d'acceptation des CGU/Confidentialité/Cookies, capturée au clic sur « Rejoindre »
+ *  (cf. src/server/terms-consent.ts) et rattachée à la session lors de la connexion réelle qui suit. */
+export interface TermsConsent {
+  version: string;
+  acceptedAt: string;
+}
+
 export interface AppSession {
   sid: string;
   accessToken: string;
@@ -44,11 +51,13 @@ export interface AppSession {
   accessibleOrganizations?: AccessibleOrganization[];
   expiresAt: number;
   forcePasswordChange?: boolean;
+  termsConsent?: TermsConsent;
 }
 
 export type ClientSession = {
   user: SessionUser;
   workspace?: WorkspaceContext;
   forcePasswordChange: boolean;
+  termsConsent?: TermsConsent;
   expiresAt: number;
 };

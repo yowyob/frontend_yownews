@@ -8,6 +8,7 @@ import { clearDraft, isDraftMeaningful, loadDraft } from '@/components/content-e
 import StatusBadge from '@/components/education/StatusBadge';
 import RowMenu from '@/components/education/RowMenu';
 import BlogPreviewModal from '@/components/education/BlogPreviewModal';
+import { useConfirm } from '@/components/ui/useConfirm';
 import ModerationLink from '@/components/education/ModerationLink';
 
 const DRAFT_KIND = 'blog';
@@ -116,6 +117,7 @@ function MyBlogs({ onEdit }: { onEdit: (blog: BlogDetail) => void }) {
   const [preview, setPreview] = useState<BlogDetail | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   useEffect(() => {
     let cancelled = false;
@@ -169,7 +171,7 @@ function MyBlogs({ onEdit }: { onEdit: (blog: BlogDetail) => void }) {
   };
 
   const remove = async (id: string) => {
-    if (!window.confirm('Supprimer ce blog ? Il sera archivé et retiré de vos listes.')) return;
+    if (!(await confirm('Supprimer ce blog ? Il sera archivé et retiré de vos listes.'))) return;
     setBusyId(id);
     try {
       await apiFetch(`/api/education/blogs/${id}`, { method: 'DELETE' });
@@ -193,6 +195,7 @@ function MyBlogs({ onEdit }: { onEdit: (blog: BlogDetail) => void }) {
 
   return (
     <div>
+      {ConfirmDialog}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
         {tabBtn('DRAFT', 'Brouillons')}
         {tabBtn('SUBMITTED', 'En attente de validation')}

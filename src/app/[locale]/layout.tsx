@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import '../globals.css';
 import { Sora, Plus_Jakarta_Sans, Poppins } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
@@ -52,6 +53,7 @@ export default async function LocaleLayout({
         user: session.user,
         workspace: session.workspace,
         forcePasswordChange: session.forcePasswordChange ?? false,
+        termsConsent: session.termsConsent,
         expiresAt: session.expiresAt,
       };
     }

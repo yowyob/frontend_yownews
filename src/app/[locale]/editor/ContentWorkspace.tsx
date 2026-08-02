@@ -8,6 +8,7 @@ import type { ContentTypeConfig, ExtraBodyResult, InitialContent } from '@/compo
 import { clearDraft, isDraftMeaningful, loadDraft } from '@/components/content-editor/draftCache';
 import RowMenu from '@/components/education/RowMenu';
 import StatusBadge from '@/components/education/StatusBadge';
+import { useConfirm } from '@/components/ui/useConfirm';
 import BlogPreviewModal, { type BlogPreviewData } from '@/components/education/BlogPreviewModal';
 import ModerationLink from '@/components/education/ModerationLink';
 import { useAppRouter } from '@/components/ui/app-link';
@@ -164,6 +165,7 @@ function MyContent({ kind, onEdit }: { kind: WorkspaceKind; onEdit: (item: Conte
   const [preview, setPreview] = useState<BlogPreviewData | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   useEffect(() => {
     let cancelled = false;
@@ -217,7 +219,7 @@ function MyContent({ kind, onEdit }: { kind: WorkspaceKind; onEdit: (item: Conte
   };
 
   const remove = async (id: string) => {
-    if (!window.confirm(`Supprimer ce ${meta.noun.toLowerCase()} ? Il sera archivé et retiré de vos listes.`)) return;
+    if (!(await confirm(`Supprimer ce ${meta.noun.toLowerCase()} ? Il sera archivé et retiré de vos listes.`))) return;
     setBusyId(id);
     try {
       await apiFetch(`/api/education/${kind}/${id}`, { method: 'DELETE' });
@@ -241,6 +243,7 @@ function MyContent({ kind, onEdit }: { kind: WorkspaceKind; onEdit: (item: Conte
 
   return (
     <div>
+      {ConfirmDialog}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
         {tabBtn('DRAFT', 'Brouillons')}
         {tabBtn('SUBMITTED', 'En attente de validation')}

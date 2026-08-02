@@ -3,6 +3,7 @@ import { Fragment, useEffect, useState, type CSSProperties } from 'react';
 import { apiFetch, BffApiError } from '@/lib/api-client';
 import BlogPreviewModal, { type BlogPreviewData } from '@/components/education/BlogPreviewModal';
 import StatusBadge from '@/components/education/StatusBadge';
+import { useConfirm } from '@/components/ui/useConfirm';
 
 export type ContentModerationKind = 'blogs' | 'courses' | 'podcasts';
 
@@ -72,6 +73,7 @@ export default function ContentModeration({ kind }: { kind: ContentModerationKin
   const [toast, setToast] = useState<string | null>(null);
   const [preview, setPreview] = useState<BlogPreviewData | null>(null);
   const [authorNames, setAuthorNames] = useState<Map<string, string>>(new Map());
+  const { confirm, ConfirmDialog } = useConfirm();
 
   // Cours uniquement : unités dépliées par cours (clé = courseId).
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -175,7 +177,7 @@ export default function ContentModeration({ kind }: { kind: ContentModerationKin
 
   async function remove(id: string) {
     setMenu(null);
-    if (!window.confirm(`Supprimer ce ${noun.singular} ? Il sera archivé.`)) return;
+    if (!(await confirm(`Supprimer ce ${noun.singular} ? Il sera archivé.`))) return;
     setBusyId(id);
     setError(null);
     try {
@@ -251,6 +253,7 @@ export default function ContentModeration({ kind }: { kind: ContentModerationKin
 
   return (
     <div>
+      {ConfirmDialog}
       {toast && (
         <div style={{ position: 'fixed', top: 20, right: 24, zIndex: 9999, background: 'var(--primary)', color: '#fff', padding: '12px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, boxShadow: '0 8px 24px rgba(0,0,0,.2)' }}>
           {toast}

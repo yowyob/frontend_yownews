@@ -2,6 +2,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api-client';
+import { useSessionUser } from '@/components/providers/session-provider';
+import UserAvatar from '@/components/ui/UserAvatar';
 
 // Bleu de la landing page (--b600 dans landingStyles.ts), en aplat — jamais en dégradé.
 const LANDING_BLUE = '#1F5FBF';
@@ -61,10 +63,6 @@ const READER_NAV: { label: string; items: NavItem[] }[] = [
     ],
   },
 ];
-
-function initials(name: string) {
-  return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
-}
 
 function EvaluateAppModal({ onClose }: { onClose: () => void }) {
   const [score, setScore] = useState(0);
@@ -131,6 +129,7 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
   // (hasEducation/hasForum). Hors mode org, aucun filtrage (valeurs par défaut à true).
   const showEducation = !orgMode || hasEducation;
   const showForum = !orgMode || hasForum;
+  const sessionUser = useSessionUser();
   const pathname = usePathname();
   const router = useRouter();
   const [educationOpen, setEducationOpen] = useState(true);
@@ -176,7 +175,9 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
     let cancelled = false;
     (async () => {
       try {
-        const u = await apiFetch<unknown[]>('/api/admin/users');
+        // Adhésions à l'org, pas comptes du tenant : même population que /admin/users et que la
+        // carte du dashboard (cf. @/lib/admin-members), sinon le badge affiche un autre chiffre.
+        const u = await apiFetch<unknown[]>('/api/admin/members');
         if (!cancelled) setUserCount(Array.isArray(u) ? u.length : null);
       } catch { /* badge masqué si indisponible */ }
     })();
@@ -234,7 +235,6 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
     // boucle ci-dessous) — sans ce cas, le titre retombait sur « Tableau de bord ».
     if (pathname.includes('/feed/blogs')) return 'Blogs';
     if (pathname.includes('/feed/podcasts')) return 'Podcasts';
-    if (pathname.includes('/feed/cours')) return 'Cours';
     // Mon Profil / Paramètres n'apparaissent plus dans la sidebar (déplacés dans le menu du
     // profil de la navbar) mais le titre doit quand même refléter la page active.
     if (pathname === profileHref || pathname.startsWith(profileHref + '/')) return 'Mon Profil';
@@ -385,9 +385,14 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
 
         {/* Profile */}
         <div style={{ padding: '18px 20px', borderBottom: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: '50%', border: '2px solid rgba(255,255,255,.25)', background: LANDING_BLUE, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-d)', fontWeight: 800, fontSize: '14px', color: '#fff', flexShrink: 0 }}>
-            {initials(displayName)}
-          </div>
+          <UserAvatar
+            name={displayName}
+            userId={sessionUser?.id}
+            size={44}
+            fontSize={14}
+            bg={LANDING_BLUE}
+            style={{ border: '2px solid rgba(255,255,255,.25)' }}
+          />
           <div style={{ flex: 1, minWidth: 0 }} className="sb-text">
             <div style={{ fontFamily: 'var(--font-d)', fontSize: '14.5px', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</div>
             <span style={{
@@ -483,7 +488,6 @@ export default function AdminSidebar({ displayName, variant = 'admin', roleBadge
                     <div className="sb-text" style={{ marginBottom: '4px' }}>
                       {renderSubLink(`${spacePrefix}/feed/blogs`, 'Blogs')}
                       {renderSubLink(`${spacePrefix}/feed/podcasts`, 'Podcasts')}
-                      {renderSubLink(`${spacePrefix}/feed/cours`, 'Cours')}
                     </div>
                   )}
                 </>

@@ -2,31 +2,14 @@
 import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import UserAvatar from '@/components/ui/UserAvatar';
+import {
+  ROLE_EDITOR, ROLE_READER, mergeMembers, roleKind,
+  type Member, type TenantUser, type AdminUser, type RoleKind,
+} from '@/lib/admin-members';
+import { useConfirm } from '@/components/ui/useConfirm';
 
-// Codes de rôle RBAC education (cf. templates KSM). Deux rôles seulement : Rédacteur / Lecteur.
-const ROLE_EDITOR = 'EDUCATION_EDITOR_PERMISSIONS';
-const ROLE_READER = 'EDUCATION_READER_PERMISSIONS';
-
-type RoleRef = { assignmentId: string; roleId: string; code: string | null; name: string | null; scopeType: string | null };
-type TenantUser = {
-  userId: string; email: string; username: string; status: string; createdAt: string | null;
-  firstName: string | null; lastName: string | null; roles: RoleRef[];
-};
-// Membre de l'org (adhésion) renvoyé par /api/admin/members.
-type Member = {
-  id: string; userId: string; email: string; firstName: string | null; lastName: string | null;
-  roleName: string | null; status: string; photoId: string | null;
-};
-// Vue fusionnée affichée : l'adhésion (statut + membershipId + photo) enrichie des rôles RBAC
-// (assignmentId, pour le changement/révocation de rôle) résolus par userId.
-type AdminUser = {
-  userId: string; membershipId: string; email: string; username: string;
-  membershipStatus: string; createdAt: string | null;
-  firstName: string | null; lastName: string | null; photoId: string | null; roles: RoleRef[];
-};
 type AdminRole = { id: string; code: string; name: string };
 
-type RoleKind = 'editor' | 'reader' | 'admin' | 'none';
 type RoleFilter = 'all' | 'editor' | 'reader';
 
 const ROLE_FILTERS: { key: RoleFilter; label: string }[] = [
@@ -45,13 +28,6 @@ const ROLE_BADGE: Record<RoleKind, { label: string; bg: string; color: string }>
 const PAGE_SIZE = 10;
 const AVATAR_COLORS = ['#1565C0', '#7C3AED', '#0891B2', '#16A34A', '#EA580C', '#DC2626', '#DB2777', '#9333EA'];
 
-function roleKind(u: AdminUser): RoleKind {
-  const codes = u.roles.map((r) => r.code);
-  if (codes.includes(ROLE_EDITOR)) return 'editor';
-  if (codes.includes(ROLE_READER)) return 'reader';
-  if (codes.some((c) => c === 'SUPER_EDUCATION_SERVICES_MANAGER' || c === 'EDUCATION_MANAGER')) return 'admin';
-  return 'none';
-}
 function displayName(u: { firstName: string | null; lastName: string | null; email: string }): string {
   const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
   return full || u.email;
@@ -60,27 +36,6 @@ function avatarColor(id: string): string {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
-}
-
-// Fusionne les membres de l'org avec les rôles RBAC (par userId). Seuls les membres invités
-// apparaissent (les comptes du tenant jamais invités sont ignorés).
-function mergeMembers(members: Member[], tenantUsers: TenantUser[]): AdminUser[] {
-  const byId = new Map(tenantUsers.map((u) => [u.userId, u]));
-  return members.map((m) => {
-    const tu = byId.get(m.userId);
-    return {
-      userId: m.userId,
-      membershipId: m.id,
-      email: m.email || tu?.email || '',
-      username: tu?.username ?? '',
-      membershipStatus: m.status,
-      createdAt: tu?.createdAt ?? null,
-      firstName: m.firstName ?? tu?.firstName ?? null,
-      lastName: m.lastName ?? tu?.lastName ?? null,
-      photoId: m.photoId ?? null,
-      roles: tu?.roles ?? [],
-    };
-  });
 }
 
 export default function UsersPage() {
@@ -94,6 +49,7 @@ export default function UsersPage() {
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2500); };
 
@@ -170,7 +126,7 @@ export default function UsersPage() {
 
   async function removeFromOrg(user: AdminUser) {
     setMenu(null);
-    if (!window.confirm(`Retirer ${displayName(user)} de l'organisation ? Le compte perdra son accès (rôle) et devra être réinvité.`)) return;
+    if (!(await confirm(`Retirer ${displayName(user)} de l'organisation ? Le compte perdra son accès (rôle) et devra être réinvité.`))) return;
     setBusyId(user.userId);
     try {
       await apiFetch(`/api/admin/members/${user.membershipId}`, { method: 'DELETE' });
@@ -205,6 +161,7 @@ export default function UsersPage() {
 
   return (
     <div>
+      {ConfirmDialog}
       {toast && (
         <div style={{ position: 'fixed', top: '20px', right: '24px', zIndex: 9999, background: 'var(--primary)', color: '#fff', padding: '12px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-d)', boxShadow: '0 8px 24px rgba(0,0,0,.2)' }}>
           {toast}

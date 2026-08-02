@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import RowMenu, { type MenuItem } from '@/components/education/RowMenu';
+import { useConfirm } from '@/components/ui/useConfirm';
 
 type NewsletterStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 type Categorie = { id: string; nom: string };
@@ -36,6 +37,8 @@ export default function NewsletterPublicationModeration() {
   const [items, setItems] = useState<Publication[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [subscribersView, setSubscribersView] = useState<{ publication: Publication; emails: string[] | null } | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const load = async () => {
     setItems(null);
@@ -56,7 +59,7 @@ export default function NewsletterPublicationModeration() {
   };
 
   const remove = async (id: string) => {
-    if (!window.confirm('Supprimer définitivement cette newsletter et tous ses contenus ?')) return;
+    if (!(await confirm('Supprimer définitivement cette newsletter et tous ses contenus ?'))) return;
     setBusyId(id); setError(null);
     try {
       await apiFetch(`/api/newsletter/newsletters/${id}`, { method: 'DELETE' });
@@ -66,23 +69,39 @@ export default function NewsletterPublicationModeration() {
     } finally { setBusyId(null); }
   };
 
+  // Union catégories + suiveurs du rédacteur + abonnés directs : « qui recevrait un e-mail si
+  // cette newsletter publiait maintenant ? » (voir NewsletterEntityService.getSubscriberEmails).
+  const viewSubscribers = async (p: Publication) => {
+    setSubscribersView({ publication: p, emails: null });
+    try {
+      const emails = await apiFetch<string[]>(`/api/newsletter/newsletters/${p.id}/subscribers`);
+      setSubscribersView({ publication: p, emails });
+    } catch {
+      setSubscribersView({ publication: p, emails: [] });
+    }
+  };
+
   const menuFor = (p: Publication): MenuItem[] => {
+    const voir: MenuItem = { label: 'Voir les abonnés', onClick: () => viewSubscribers(p) };
     const del: MenuItem = { label: 'Supprimer', onClick: () => remove(p.id), danger: true };
     if (p.statut === 'PENDING') return [
+      voir,
       { label: 'Valider', onClick: () => setStatut(p.id, 'approve', 'APPROVED') },
       { label: 'Rejeter', onClick: () => setStatut(p.id, 'reject', 'REJECTED'), danger: true },
     ];
     if (p.statut === 'APPROVED') return [
+      voir,
       { label: 'Rejeter', onClick: () => setStatut(p.id, 'reject', 'REJECTED'), danger: true },
       del,
     ];
-    return [del];
+    return [voir, del];
   };
 
   const author = (p: Publication) => [p.authorPrenom, p.authorNom].filter(Boolean).join(' ') || '—';
 
   return (
     <div>
+      {ConfirmDialog}
       {error && <div style={{ padding: '10px 14px', background: '#FEF2F2', color: '#DC2626', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {TABS.map((t) => (
@@ -137,6 +156,39 @@ export default function NewsletterPublicationModeration() {
           </tbody>
         </table>
       </div>
+
+      {subscribersView && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSubscribersView(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', padding: '24px', maxWidth: '440px', width: '100%', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 20px 45px rgba(0,0,0,.18)' }}>
+            <h3 style={{ fontSize: '17px', fontWeight: 800, margin: '0 0 4px' }}>Abonnés à « {subscribersView.publication.titre} »</h3>
+            <p style={{ fontSize: '12.5px', color: 'var(--gray-500)', margin: '0 0 16px' }}>
+              Catégories, suiveurs du rédacteur et abonnés directs confondus.
+            </p>
+            {subscribersView.emails === null ? (
+              <div style={{ color: 'var(--gray-400)', fontSize: '14px' }}>Chargement…</div>
+            ) : subscribersView.emails.length === 0 ? (
+              <div style={{ color: 'var(--gray-500)', fontSize: '14px' }}>Aucun abonné pour l&apos;instant.</div>
+            ) : (
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {subscribersView.emails.map((email) => (
+                  <li key={email} style={{ fontSize: '13.5px', padding: '6px 10px', background: 'var(--gray-50)', borderRadius: '8px' }}>{email}</li>
+                ))}
+              </ul>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '18px' }}>
+              <button type="button" onClick={() => setSubscribersView(null)} style={{
+                border: '1px solid var(--gray-200)', borderRadius: '8px', padding: '9px 18px', background: '#fff',
+                color: 'var(--gray-700)', fontWeight: 600, fontSize: '13.5px', cursor: 'pointer',
+              }}>Fermer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

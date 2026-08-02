@@ -119,7 +119,7 @@ export const LANDING_CSS = `
 
 /* FOOTER */
 .lv-footer{background:#0a1d3f;color:rgba(255,255,255,.7);padding:60px 0 30px;font-size:14px}
-.lv-footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;margin-bottom:40px}
+.lv-footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:40px;margin-bottom:40px}
 .lv-footer h4{color:#fff;font-size:14px;font-weight:700;margin-bottom:16px;letter-spacing:.5px;text-transform:uppercase}
 .lv-footer ul{list-style:none;margin:0;padding:0}
 .lv-footer li{margin-bottom:8px}

@@ -41,6 +41,9 @@ export default function LoginPage() {
   // « Rejoindre » émet l'invitation (qui attribue le rôle) ; il suffit ensuite de se reconnecter.
   const [joinStep, setJoinStep] = useState<{ pendingId: string; email: string } | null>(null);
   const [joinState, setJoinState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  // Consentement obligatoire aux CGU/Confidentialité/Cookies avant d'obtenir le rôle lecteur
+  // (case à cocher requise pour activer « Rejoindre »).
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   function validate() {
     const errs: typeof fieldErrors = {};
@@ -121,10 +124,16 @@ export default function LoginPage() {
   }
 
   async function handleJoin() {
-    if (!joinStep || joinState === 'sending') return;
+    if (!joinStep || joinState === 'sending' || !termsAccepted) return;
     setJoinState('sending');
     try {
-      await apiFetch('/api/auth/login/join', { method: 'POST', body: { pendingId: joinStep.pendingId } });
+      await apiFetch('/api/auth/login/join', {
+        method: 'POST',
+        body: {
+          pendingId: joinStep.pendingId,
+          acceptedTerms: { version: '1.0', acceptedAt: new Date().toISOString() },
+        },
+      });
       setJoinState('sent');
     } catch {
       setJoinState('error');
@@ -194,7 +203,7 @@ export default function LoginPage() {
               </p>
               <button
                 type="button"
-                onClick={() => { setJoinStep(null); setJoinState('idle'); setPassword(''); setGlobalError(null); }}
+                onClick={() => { setJoinStep(null); setJoinState('idle'); setPassword(''); setGlobalError(null); setTermsAccepted(false); }}
                 className="w-full py-3 px-6 rounded-[10px] font-display font-semibold text-sm text-white bg-[#FF6B35] hover:bg-[#E55A2B] transition-all duration-200"
               >
                 Se reconnecter
@@ -207,10 +216,34 @@ export default function LoginPage() {
                 Le compte <strong className="text-[#0F172A]">{joinStep.email}</strong> n&apos;a pas encore
                 accès à Yowyob Education. Cliquez sur <strong>Rejoindre</strong> pour obtenir l&apos;accès.
               </p>
+              <label className="flex items-start gap-2.5 text-left mb-5 text-xs text-[#475569] leading-relaxed cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#FF6B35] focus:ring-[#FF6B35]"
+                  aria-required="true"
+                />
+                <span>
+                  J&apos;ai lu et j&apos;accepte les{' '}
+                  <Link href="/legal/cgu" target="_blank" rel="noopener noreferrer" className="text-[#1F5FBF] underline hover:text-[#FF6B35]">
+                    Conditions d&apos;utilisation
+                  </Link>
+                  , la{' '}
+                  <Link href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-[#1F5FBF] underline hover:text-[#FF6B35]">
+                    Politique de confidentialité
+                  </Link>{' '}
+                  et la{' '}
+                  <Link href="/legal/cookies" target="_blank" rel="noopener noreferrer" className="text-[#1F5FBF] underline hover:text-[#FF6B35]">
+                    Notice Cookies
+                  </Link>{' '}
+                  de Yowyob Education.
+                </span>
+              </label>
               <button
                 type="button"
                 onClick={handleJoin}
-                disabled={joinState === 'sending'}
+                disabled={joinState === 'sending' || !termsAccepted}
                 className="w-full py-3 px-6 rounded-[10px] font-display font-semibold text-sm text-white bg-[#FF6B35] hover:bg-[#E55A2B] disabled:opacity-60 transition-all duration-200"
               >
                 {joinState === 'sending' ? 'En cours…' : 'Rejoindre'}
@@ -223,7 +256,7 @@ export default function LoginPage() {
           <div className="mt-8 pt-6 border-t border-gray-100 w-full text-center">
             <button
               type="button"
-              onClick={() => { setJoinStep(null); setJoinState('idle'); setGlobalError(null); }}
+              onClick={() => { setJoinStep(null); setJoinState('idle'); setGlobalError(null); setTermsAccepted(false); }}
               className="text-sm text-[#1F5FBF] font-medium hover:text-[#FF6B35] transition-colors"
             >
               Retour à la connexion
@@ -417,9 +450,9 @@ export default function LoginPage() {
           {/* Terms */}
           <p className="text-center mt-5 text-xs text-gray-400 leading-relaxed">
             En vous connectant, vous acceptez nos{' '}
-            <a href="#" className="text-gray-500 underline hover:text-[#1F5FBF] transition-colors">Conditions d&apos;utilisation</a>{' '}
+            <Link href="/legal/cgu" target="_blank" rel="noopener noreferrer" className="text-gray-500 underline hover:text-[#1F5FBF] transition-colors">Conditions d&apos;utilisation</Link>{' '}
             et notre{' '}
-            <a href="#" className="text-gray-500 underline hover:text-[#1F5FBF] transition-colors">Politique de confidentialité</a>.
+            <Link href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-gray-500 underline hover:text-[#1F5FBF] transition-colors">Politique de confidentialité</Link>.
           </p>
         </div>
     </AuthLayout>

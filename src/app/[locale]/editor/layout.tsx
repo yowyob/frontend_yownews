@@ -24,6 +24,7 @@ export default async function EditorLayout({ children }: { children: React.React
     user: session.user,
     workspace: session.workspace,
     forcePasswordChange: session.forcePasswordChange ?? false,
+    termsConsent: session.termsConsent,
     expiresAt: session.expiresAt,
   };
 

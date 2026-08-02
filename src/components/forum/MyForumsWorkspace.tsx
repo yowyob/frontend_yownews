@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { AppLink, useAppRouter } from '@/components/ui/app-link';
 import RowMenu, { type MenuItem } from '@/components/education/RowMenu';
+import { useConfirm } from '@/components/ui/useConfirm';
 
 type ForumStatus = 'PENDING' | 'VALIDATED' | 'REJECTED';
 type GroupType = 'FORUM' | 'COMMUNITY';
@@ -69,7 +70,7 @@ function CommunityForums({ mode, excludeIds }: { mode: 'FORUM' | 'COMMUNITY'; ex
     .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
   const shown = sorted.slice(0, SIDEBAR_LIMIT);
 
-  const heading = mode === 'COMMUNITY' ? 'Communautés populaires' : 'Forums de la communauté';
+  const heading = mode === 'COMMUNITY' ? 'Communautés populaires' : 'Forums';
   const emptyText = mode === 'COMMUNITY' ? 'Aucune communauté à découvrir pour le moment.' : 'Aucun forum à découvrir pour le moment.';
 
   return (
@@ -213,6 +214,7 @@ export default function MyForumsWorkspace({ userId }: { userId: string; orgMode?
   const [spaceMode, setSpaceMode] = useState<'FORUM' | 'COMMUNITY'>('FORUM');
   // Sous-onglet : espaces créés par l'utilisateur ou espaces rejoints (membre non créateur).
   const [subTab, setSubTab] = useState<'created' | 'joined'>('created');
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const load = useCallback(() => {
     apiFetch<DiscussionGroup[]>('/api/forum/groups/mine')
@@ -221,6 +223,16 @@ export default function MyForumsWorkspace({ userId }: { userId: string; orgMode?
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const remove = async (groupId: string) => {
+    if (!(await confirm('Supprimer cet espace ? Les membres, catégories et publications associés seront perdus.'))) return;
+    try {
+      await apiFetch(`/api/forum/groups/${groupId}`, { method: 'DELETE' });
+      load();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Échec de la suppression');
+    }
+  };
 
   const isCommunity = spaceMode === 'COMMUNITY';
   // Les forums enfants d'une communauté se gèrent depuis la communauté, pas dans « Mes forums ».
@@ -264,6 +276,7 @@ export default function MyForumsWorkspace({ userId }: { userId: string; orgMode?
 
   return (
     <div className="my-forums-grid">
+      {ConfirmDialog}
       <div style={{ minWidth: 0 }}>
       {/* En-tête : titre + sous-titre à gauche, bouton de création à droite */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '18px' }}>
@@ -340,7 +353,10 @@ export default function MyForumsWorkspace({ userId }: { userId: string; orgMode?
               {filtered.map((g) => {
                 const menuItems: MenuItem[] = [];
                 if (g.status === 'VALIDATED') menuItems.push({ label: 'Ouvrir', onClick: () => router.push(`/forums/${g.groupId}`) });
-                if (g.creatorId === userId) menuItems.push({ label: 'Modifier', onClick: () => setEditing(g) });
+                if (g.creatorId === userId) {
+                  menuItems.push({ label: 'Modifier', onClick: () => setEditing(g) });
+                  menuItems.push({ label: 'Supprimer', onClick: () => remove(g.groupId), danger: true });
+                }
 
                 return (
                   <div key={g.groupId} style={{

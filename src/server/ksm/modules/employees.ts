@@ -12,6 +12,8 @@ export type EmployeeMembershipResponse = {
   email: string;
   firstName?: string | null;
   lastName?: string | null;
+  photoUri?: string | null;
+  photoId?: string | null;
   agencyId?: string | null;
   roleId?: string | null;
   roleName?: string | null;
@@ -88,6 +90,40 @@ export function acceptInvitation(tenantId: string, organizationId: string, token
       headers: { 'X-Tenant-Id': tenantId, 'X-Organization-Id': organizationId },
     },
     {},
+  );
+}
+
+/**
+ * Modifie uniquement la photo de profil d'un employé (PUT /api/employees/{id}). Les autres champs
+ * (roleId, jobTitle, department…) sont envoyés `null` et donc conservés tels quels côté KSM (patch
+ * partiel, cf. EmployeeMembership.update / Actor.patch) — aucun risque d'écraser le rôle en place.
+ */
+export function updateEmployeePhoto(
+  session: AppSession,
+  organizationId: string,
+  membershipId: string,
+  photoId: string | null,
+  photoUri: string | null = null,
+) {
+  return callKsm<EmployeeMembershipResponse>(
+    `/api/employees/${membershipId}`,
+    {
+      method: 'PUT',
+      body: {
+        roleId: null,
+        agencyId: null,
+        firstName: null,
+        lastName: null,
+        jobTitle: null,
+        department: null,
+        phoneNumber: null,
+        employmentType: null,
+        photoUri,
+        photoId,
+      },
+      organizationId,
+    },
+    { session },
   );
 }
 

@@ -27,6 +27,9 @@ type UserPublicProfile = {
   contents: PublicContentInfo[];
 };
 
+type ApprovedRedacteur = { id: string; email: string; nom: string; prenom: string } | null;
+type AuthorNewsletter = { id: string; titre: string };
+
 const TYPE_LABELS: Record<string, string> = {
   BLOG: 'Article',
   PODCAST: 'Podcast',
@@ -57,6 +60,79 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<'publications' | 'newsletter'>('publications');
+  const [authorRedacteur, setAuthorRedacteur] = useState<ApprovedRedacteur>(null);
+  const [authorNewsletters, setAuthorNewsletters] = useState<AuthorNewsletter[]>([]);
+  const [redacteurFollowed, setRedacteurFollowed] = useState(false);
+  const [redacteurFollowBusy, setRedacteurFollowBusy] = useState(false);
+  const [subscribedNewsletterIds, setSubscribedNewsletterIds] = useState<Set<string>>(new Set());
+  const [newsletterBusyId, setNewsletterBusyId] = useState<string | null>(null);
+
+  // Le profilé est-il un rédacteur newsletter, et lesquelles de ses newsletters sont approuvées ?
+  // Distinct du suivi générique de l'auteur (bouton "Suivre" ci-dessus, /api/follows) — ceci
+  // concerne spécifiquement l'abonnement newsletter (mécanismes #2 et #3, voir onglet Newsletter).
+  useEffect(() => {
+    if (!profile?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const redacteur = await apiFetch<ApprovedRedacteur>(`/api/newsletter/redacteurs/by-user/${profile.id}`);
+        if (cancelled) return;
+        setAuthorRedacteur(redacteur);
+        if (redacteur) {
+          apiFetch<{ id: string }[]>('/api/newsletter/subscriptions/redacteurs')
+            .then((mine) => { if (!cancelled && Array.isArray(mine)) setRedacteurFollowed(mine.some((r) => r.id === redacteur.id)); })
+            .catch(() => {});
+        }
+      } catch { /* pas un rédacteur */ }
+      try {
+        const info = await apiFetch<{ hasNewsletter: boolean; newsletters: AuthorNewsletter[] }>(`/api/newsletter/newsletters/by-author/${profile.id}`);
+        if (!cancelled) setAuthorNewsletters(info?.newsletters ?? []);
+      } catch { /* pas de newsletter */ }
+      try {
+        const ids = await apiFetch<string[]>('/api/newsletter/subscriptions/newsletters');
+        if (!cancelled && Array.isArray(ids)) setSubscribedNewsletterIds(new Set(ids));
+      } catch { /* best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.id]);
+
+  async function toggleFollowRedacteur() {
+    if (!authorRedacteur || redacteurFollowBusy) return;
+    setRedacteurFollowBusy(true);
+    try {
+      if (redacteurFollowed) {
+        await apiFetch(`/api/newsletter/subscriptions/redacteurs/${authorRedacteur.id}`, { method: 'DELETE' });
+        setRedacteurFollowed(false);
+      } else {
+        await apiFetch(`/api/newsletter/subscriptions/redacteurs/${authorRedacteur.id}`, {
+          method: 'POST',
+          body: { email: sessionUser?.email ?? '' },
+        });
+        setRedacteurFollowed(true);
+      }
+    } catch (e) { console.error(e); }
+    finally { setRedacteurFollowBusy(false); }
+  }
+
+  async function toggleSubscribeNewsletter(newsletterId: string) {
+    if (newsletterBusyId) return;
+    setNewsletterBusyId(newsletterId);
+    const alreadySubscribed = subscribedNewsletterIds.has(newsletterId);
+    try {
+      if (alreadySubscribed) {
+        await apiFetch(`/api/newsletter/newsletters/${newsletterId}/subscribe`, { method: 'DELETE' });
+        setSubscribedNewsletterIds((prev) => { const next = new Set(prev); next.delete(newsletterId); return next; });
+      } else {
+        await apiFetch(`/api/newsletter/newsletters/${newsletterId}/subscribe`, {
+          method: 'POST',
+          body: { email: sessionUser?.email ?? '' },
+        });
+        setSubscribedNewsletterIds((prev) => new Set(prev).add(newsletterId));
+      }
+    } catch (e) { console.error(e); }
+    finally { setNewsletterBusyId(null); }
+  }
 
   useEffect(() => {
     if (!userId) return;
@@ -159,8 +235,63 @@ export default function UserProfilePage() {
         )}
       </div>
 
+      {/* Onglets : Publications / Newsletter (visible seulement si l'auteur a ≥1 newsletter approuvée) */}
+      {authorNewsletters.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          {([['publications', 'Publications'], ['newsletter', 'Newsletter']] as const).map(([key, label]) => (
+            <button key={key} type="button" onClick={() => setActiveTab(key)} style={{
+              padding: '8px 16px', borderRadius: 20,
+              border: `1px solid ${activeTab === key ? 'var(--accent)' : 'var(--gray-200)'}`,
+              background: activeTab === key ? 'var(--accent)' : '#fff',
+              color: activeTab === key ? '#fff' : 'var(--gray-600)',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}>{label}</button>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'newsletter' && authorNewsletters.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '14px', padding: '24px', marginBottom: '20px' }}>
+          {authorRedacteur && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '14px 16px', borderRadius: '10px', background: 'var(--gray-50, #f9fafb)', marginBottom: '18px' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '14px' }}>Suivre {profile.firstName || 'cet auteur'}</div>
+                <div style={{ fontSize: '12px', color: 'var(--gray-500, #6b7280)', marginTop: '2px' }}>Recevez toutes ses newsletters, actuelles et futures.</div>
+              </div>
+              <button type="button" onClick={toggleFollowRedacteur} disabled={redacteurFollowBusy} style={{
+                border: 'none', borderRadius: '20px', padding: '8px 18px', fontSize: '13px', fontWeight: 700,
+                background: redacteurFollowed ? 'var(--gray-200, #e5e7eb)' : 'var(--accent)',
+                color: redacteurFollowed ? 'var(--gray-700, #374151)' : '#fff',
+                cursor: redacteurFollowBusy ? 'default' : 'pointer', opacity: redacteurFollowBusy ? 0.7 : 1, whiteSpace: 'nowrap',
+              }}>{redacteurFollowed ? 'Suivi' : 'Suivre'}</button>
+            </div>
+          )}
+
+          <h3 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 4px' }}>Ou s&apos;abonner à une newsletter précise</h3>
+          <p style={{ fontSize: '12px', color: 'var(--gray-500, #6b7280)', margin: '0 0 14px' }}>
+            Ne couvre que cette newsletter — les futures newsletters de {profile.firstName || 'cet auteur'} ne seront pas incluses.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {authorNewsletters.map((n) => {
+              const subscribed = subscribedNewsletterIds.has(n.id);
+              const busy = newsletterBusyId === n.id;
+              return (
+                <div key={n.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '10px', padding: '12px 14px' }}>
+                  <div style={{ fontWeight: 600, fontSize: '13.5px' }}>{n.titre}</div>
+                  <button type="button" onClick={() => toggleSubscribeNewsletter(n.id)} disabled={busy} style={{
+                    border: `1px solid ${subscribed ? 'var(--gray-200, #e5e7eb)' : 'var(--accent)'}`, borderRadius: '8px', padding: '6px 14px',
+                    background: subscribed ? '#fff' : 'var(--accent)', color: subscribed ? 'var(--gray-700, #374151)' : '#fff',
+                    fontSize: '12.5px', fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1, whiteSpace: 'nowrap',
+                  }}>{subscribed ? 'Abonné' : 'S’abonner'}</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Publications de l'auteur */}
-      <div style={{ background: '#fff', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '14px', padding: '24px' }}>
+      <div style={{ display: activeTab === 'publications' || authorNewsletters.length === 0 ? 'block' : 'none', background: '#fff', border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '14px', padding: '24px' }}>
         <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '18px', fontWeight: 700, margin: '0 0 16px', color: 'var(--primary)' }}>
           Publications de {profile.firstName || 'cet auteur'}
         </h2>

@@ -4,6 +4,7 @@ import { apiFetch } from '@/lib/api-client';
 import RowMenu, { type MenuItem } from '@/components/education/RowMenu';
 import NewsletterSubscriptions from '@/components/newsletter/NewsletterSubscriptions';
 import BlockEditor from '@/components/block-editor/BlockEditor';
+import { useConfirm } from '@/components/ui/useConfirm';
 
 type RedacteurStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 type NewsletterStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -177,6 +178,7 @@ function ContentSpace({ publication, onBack }: { publication: Publication; onBac
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [confirmPublishId, setConfirmPublishId] = useState<string | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const load = async () => {
     try { setContents(await apiFetch<ContentItem[]>(`/api/newsletter/newsletters/${publication.id}/contents`)); }
@@ -212,6 +214,29 @@ function ContentSpace({ publication, onBack }: { publication: Publication; onBac
     }
   };
 
+  const remove = async (id: string) => {
+    if (!(await confirm('Supprimer ce contenu ? Cette action est irréversible.'))) return;
+    setMessage(null);
+    try {
+      await apiFetch(`/api/newsletter/contents/${id}`, { method: 'DELETE' });
+      setMessage({ kind: 'ok', text: 'Contenu supprimé.' });
+      load();
+    } catch (e) {
+      setMessage({ kind: 'err', text: e instanceof Error ? e.message : 'Échec de la suppression' });
+    }
+  };
+
+  const submitContentItem = async (id: string) => {
+    setMessage(null);
+    try {
+      await apiFetch(`/api/newsletter/contents/${id}/submit`, { method: 'POST' });
+      setMessage({ kind: 'ok', text: 'Contenu soumis à validation.' });
+      load();
+    } catch (e) {
+      setMessage({ kind: 'err', text: e instanceof Error ? e.message : 'Échec de la soumission' });
+    }
+  };
+
   const publishContent = async (id: string) => {
     setConfirmPublishId(null);
     setMessage(null);
@@ -227,6 +252,7 @@ function ContentSpace({ publication, onBack }: { publication: Publication; onBac
 
   return (
     <div style={{ maxWidth: '720px' }}>
+      {ConfirmDialog}
       <button type="button" onClick={onBack} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: '12px' }}>
          Mes newsletters
       </button>
@@ -271,7 +297,7 @@ function ContentSpace({ publication, onBack }: { publication: Publication; onBac
                 alignSelf: 'flex-start', border: 'none', borderRadius: '8px', padding: '10px 22px',
                 background: 'var(--accent)', color: '#fff', fontWeight: 700, fontSize: '14px',
                 cursor: titre.trim() ? 'pointer' : 'default', opacity: titre.trim() ? 1 : 0.6,
-              }}>Suivant →</button>
+              }}>Suivant </button>
             </>
           ) : (
             <>
@@ -280,7 +306,7 @@ function ContentSpace({ publication, onBack }: { publication: Publication; onBac
                 <button type="button" onClick={() => setFormStep(1)} style={{
                   border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '8px', padding: '10px 18px', background: '#fff',
                   color: 'var(--gray-700, #374151)', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
-                }}>← Titre</button>
+                }}> Titre</button>
                 <button type="button" onClick={submit} disabled={busy} style={{
                   border: 'none', borderRadius: '8px', padding: '10px 22px', background: 'var(--accent)',
                   color: '#fff', fontWeight: 700, fontSize: '14px', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1,
@@ -305,9 +331,12 @@ function ContentSpace({ publication, onBack }: { publication: Publication; onBac
               <div style={{ marginTop: '4px' }}><ContentStatutBadge statut={c.statut} /></div>
             </div>
             {c.statut !== 'PUBLISHED' && (
-              <button type="button" onClick={() => setConfirmPublishId(c.id)} style={{ border: 'none', borderRadius: '8px', padding: '7px 14px', background: 'var(--accent)', color: '#fff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}>
-                Publier
-              </button>
+              <RowMenu items={([
+                (c.statut === 'DRAFT' || c.statut === 'REJECTED')
+                  ? { label: 'Soumettre', onClick: () => submitContentItem(c.id) } : null,
+                c.statut === 'SUBMITTED' ? { label: 'Publier', onClick: () => setConfirmPublishId(c.id) } : null,
+                { label: 'Supprimer', onClick: () => remove(c.id), danger: true },
+              ].filter(Boolean)) as MenuItem[]} />
             )}
           </div>
         ))}
@@ -348,6 +377,9 @@ function PublicationsWorkspace() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Publication | null>(null);
   const [selected, setSelected] = useState<Publication | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [subscribersView, setSubscribersView] = useState<{ publication: Publication; emails: string[] | null } | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const load = async () => {
     try { setPublications(await apiFetch<Publication[]>('/api/newsletter/newsletters/mine')); }
@@ -355,6 +387,29 @@ function PublicationsWorkspace() {
   };
   // eslint-disable-next-line react-hooks/set-state-in-effect -- `load` réutilisé après création.
   useEffect(() => { load(); }, []);
+
+  // Union catégories + suiveurs du rédacteur + abonnés directs : « qui recevrait un e-mail si
+  // je publiais maintenant ? » (voir NewsletterEntityService.getSubscriberEmails côté KSM).
+  const viewSubscribers = async (p: Publication) => {
+    setSubscribersView({ publication: p, emails: null });
+    try {
+      const emails = await apiFetch<string[]>(`/api/newsletter/newsletters/${p.id}/subscribers`);
+      setSubscribersView({ publication: p, emails });
+    } catch {
+      setSubscribersView({ publication: p, emails: [] });
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (!(await confirm('Supprimer cette newsletter ? Cette action est irréversible.'))) return;
+    setError(null);
+    try {
+      await apiFetch(`/api/newsletter/newsletters/${id}`, { method: 'DELETE' });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Échec de la suppression');
+    }
+  };
 
   if (selected) {
     return <ContentSpace publication={selected} onBack={() => { setSelected(null); load(); }} />;
@@ -390,12 +445,16 @@ function PublicationsWorkspace() {
 
   return (
     <div style={{ maxWidth: '720px' }}>
+      {ConfirmDialog}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
         <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '20px', fontWeight: 800, margin: 0 }}>Mes newsletters</h2>
         <button type="button" onClick={() => setCreating(true)} style={{ border: 'none', borderRadius: '8px', padding: '9px 18px', background: 'var(--accent)', color: '#fff', fontWeight: 700, fontSize: '13.5px', cursor: 'pointer' }}>
           + Nouvelle newsletter
         </button>
       </div>
+      {error && (
+        <div style={{ padding: '10px 12px', borderRadius: '8px', fontSize: '13px', marginBottom: '14px', background: '#FEF2F2', color: '#B91C1C' }}>{error}</div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {publications.map((p) => {
           const clickable = p.statut === 'APPROVED';
@@ -420,13 +479,48 @@ function PublicationsWorkspace() {
               <div onClick={(e) => e.stopPropagation()}>
                 <RowMenu items={([
                   clickable ? { label: 'Ouvrir', onClick: () => setSelected(p) } : null,
+                  { label: 'Voir les abonnés', onClick: () => viewSubscribers(p) },
                   { label: 'Modifier', onClick: () => setEditing(p) },
+                  { label: 'Supprimer', onClick: () => remove(p.id), danger: true },
                 ].filter(Boolean)) as MenuItem[]} />
               </div>
             </div>
           );
         })}
       </div>
+
+      {subscribersView && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSubscribersView(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', padding: '24px', maxWidth: '440px', width: '100%', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 20px 45px rgba(0,0,0,.18)' }}>
+            <h3 style={{ fontFamily: 'var(--font-d)', fontSize: '17px', fontWeight: 800, margin: '0 0 4px' }}>Abonnés à « {subscribersView.publication.titre} »</h3>
+            <p style={{ fontSize: '12.5px', color: 'var(--gray-500, #6b7280)', margin: '0 0 16px' }}>
+              Catégories, suiveurs du rédacteur et abonnés directs confondus.
+            </p>
+            {subscribersView.emails === null ? (
+              <div style={{ color: 'var(--gray-400, #9ca3af)', fontSize: '14px' }}>Chargement…</div>
+            ) : subscribersView.emails.length === 0 ? (
+              <div style={{ color: 'var(--gray-500, #6b7280)', fontSize: '14px' }}>Aucun abonné pour l&apos;instant.</div>
+            ) : (
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {subscribersView.emails.map((email) => (
+                  <li key={email} style={{ fontSize: '13.5px', padding: '6px 10px', background: 'var(--gray-50, #f9fafb)', borderRadius: '8px' }}>{email}</li>
+                ))}
+              </ul>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '18px' }}>
+              <button type="button" onClick={() => setSubscribersView(null)} style={{
+                border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '8px', padding: '9px 18px', background: '#fff',
+                color: 'var(--gray-700, #374151)', fontWeight: 600, fontSize: '13.5px', cursor: 'pointer',
+              }}>Fermer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -470,11 +564,106 @@ function RedacteurSpace({ email }: { email: string }) {
   return <PublicationsWorkspace />;
 }
 
+// ── Sur l'onglet "Abonnements" : mes propres newsletters et leur nombre d'abonnés ──
+// (catégories + suiveurs du rédacteur + abonnés directs confondus, cf. PublicationsWorkspace).
+function MyNewslettersSubscribers() {
+  const [publications, setPublications] = useState<Publication[] | null>(null);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [view, setView] = useState<{ publication: Publication; emails: string[] | null } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      let mine: Publication[] = [];
+      try { mine = await apiFetch<Publication[]>('/api/newsletter/newsletters/mine'); } catch { mine = []; }
+      setPublications(mine);
+      mine.forEach((p) => {
+        apiFetch<string[]>(`/api/newsletter/newsletters/${p.id}/subscribers`)
+          .then((emails) => setCounts((prev) => ({ ...prev, [p.id]: emails.length })))
+          .catch(() => {});
+      });
+    })();
+  }, []);
+
+  const viewSubscribers = async (p: Publication) => {
+    setView({ publication: p, emails: null });
+    try {
+      const emails = await apiFetch<string[]>(`/api/newsletter/newsletters/${p.id}/subscribers`);
+      setView({ publication: p, emails });
+    } catch {
+      setView({ publication: p, emails: [] });
+    }
+  };
+
+  if (publications === null) return null;
+  if (publications.length === 0) return null;
+
+  return (
+    <div style={{ maxWidth: '720px', marginBottom: '28px' }}>
+      <h2 style={{ fontFamily: 'var(--font-d)', fontSize: '18px', fontWeight: 800, margin: '0 0 4px' }}>Mes newsletters</h2>
+      <p style={{ fontSize: '13px', color: 'var(--gray-500, #6b7280)', margin: '0 0 14px' }}>
+        Qui recevrait un e-mail au prochain contenu publié — catégories, suiveurs et abonnés directs confondus.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {publications.map((p) => (
+          <div key={p.id} style={{
+            border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '10px', padding: '14px 16px',
+            display: 'flex', alignItems: 'center', gap: '12px',
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: '14px' }}>{p.titre}</div>
+              <div style={{ fontSize: '12px', color: 'var(--gray-500, #6b7280)', marginTop: '2px' }}>
+                {counts[p.id] ?? '…'} abonné{(counts[p.id] ?? 0) > 1 ? 's' : ''}
+              </div>
+            </div>
+            <button type="button" onClick={() => viewSubscribers(p)} style={{
+              border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '8px', padding: '7px 14px',
+              background: '#fff', color: 'var(--gray-700, #374151)', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer',
+            }}>Voir les abonnés</button>
+          </div>
+        ))}
+      </div>
+
+      {view && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setView(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', padding: '24px', maxWidth: '440px', width: '100%', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 20px 45px rgba(0,0,0,.18)' }}>
+            <h3 style={{ fontFamily: 'var(--font-d)', fontSize: '17px', fontWeight: 800, margin: '0 0 4px' }}>Abonnés à « {view.publication.titre} »</h3>
+            <p style={{ fontSize: '12.5px', color: 'var(--gray-500, #6b7280)', margin: '0 0 16px' }}>
+              Catégories, suiveurs du rédacteur et abonnés directs confondus.
+            </p>
+            {view.emails === null ? (
+              <div style={{ color: 'var(--gray-400, #9ca3af)', fontSize: '14px' }}>Chargement…</div>
+            ) : view.emails.length === 0 ? (
+              <div style={{ color: 'var(--gray-500, #6b7280)', fontSize: '14px' }}>Aucun abonné pour l&apos;instant.</div>
+            ) : (
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {view.emails.map((email) => (
+                  <li key={email} style={{ fontSize: '13.5px', padding: '6px 10px', background: 'var(--gray-50, #f9fafb)', borderRadius: '8px' }}>{email}</li>
+                ))}
+              </ul>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '18px' }}>
+              <button type="button" onClick={() => setView(null)} style={{
+                border: '1px solid var(--gray-200, #e5e7eb)', borderRadius: '8px', padding: '9px 18px', background: '#fff',
+                color: 'var(--gray-700, #374151)', fontWeight: 600, fontSize: '13.5px', cursor: 'pointer',
+              }}>Fermer</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type WorkspaceTab = 'redaction' | 'abonnements';
 
 const TABS: { key: WorkspaceTab; label: string }[] = [
   { key: 'redaction', label: 'Créer / gérer mes newsletters' },
-  { key: 'abonnements', label: 'Mes abonnements' },
+  { key: 'abonnements', label: 'Abonnements' },
 ];
 
 export default function NewsletterWorkspace({ email }: { email: string }) {
@@ -494,7 +683,12 @@ export default function NewsletterWorkspace({ email }: { email: string }) {
         ))}
       </div>
 
-      {tab === 'redaction' ? <RedacteurSpace email={email} /> : <NewsletterSubscriptions email={email} />}
+      {tab === 'redaction' ? <RedacteurSpace email={email} /> : (
+        <>
+          <MyNewslettersSubscribers />
+          <NewsletterSubscriptions email={email} />
+        </>
+      )}
     </div>
   );
 }

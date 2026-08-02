@@ -6,19 +6,12 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api-client';
+import { mergeMembers, roleKind, type Member, type TenantUser } from '@/lib/admin-members';
 
-const ROLE_EDITOR = 'EDUCATION_EDITOR_PERMISSIONS';
-const ROLE_READER = 'EDUCATION_READER_PERMISSIONS';
-
-type RoleRef = { code: string | null };
-type AdminUser = { userId: string; roles: RoleRef[] };
 type Application = {
   id: string; userId: string; applicantEmail: string | null; applicantName: string | null;
   domains: string[]; status: 'PENDING' | 'APPROVED' | 'REJECTED'; createdAt: string | null;
 };
-
-function isEditor(u: AdminUser) { return u.roles.some((r) => r.code === ROLE_EDITOR); }
-function isReader(u: AdminUser) { return u.roles.some((r) => r.code === ROLE_READER); }
 
 const card: CSSProperties = { background: '#fff', border: '1px solid var(--gray-200)', borderRadius: 12, padding: 20, boxShadow: 'var(--sh-sm)' };
 
@@ -82,7 +75,11 @@ function BlogsStatCard({ published, pending, loading }: { published: number; pen
 type BlogStub = { id: string };
 
 function AdminDashboard({ firstName }: { firstName: string }) {
-  const [users, setUsers] = useState<AdminUser[]>([]);
+  // Les compteurs portent sur les ADHÉSIONS (cf. @/lib/admin-members) — mêmes chiffres que
+  // /admin/users et que le badge de la sidebar. /api/admin/users n'est chargé que pour les rôles
+  // RBAC, que l'adhésion ne contient pas.
+  const [users, setUsers] = useState<TenantUser[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [apps, setApps] = useState<Application[]>([]);
   const [blogCounts, setBlogCounts] = useState<{ published: number; pending: number }>({ published: 0, pending: 0 });
   const [loading, setLoading] = useState(true);
@@ -92,14 +89,16 @@ function AdminDashboard({ firstName }: { firstName: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const [u, a, published, submitted] = await Promise.all([
-          apiFetch<AdminUser[]>('/api/admin/users'),
+        const [u, m, a, published, submitted] = await Promise.all([
+          apiFetch<TenantUser[]>('/api/admin/users'),
+          apiFetch<Member[]>('/api/admin/members'),
           apiFetch<Application[]>('/api/admin/role-requests'),
           apiFetch<BlogStub[]>('/api/admin/blogs?status=PUBLISHED'),
           apiFetch<BlogStub[]>('/api/admin/blogs?status=SUBMITTED'),
         ]);
         if (!cancelled) {
           setUsers(Array.isArray(u) ? u : []);
+          setMembers(Array.isArray(m) ? m : []);
           setApps(Array.isArray(a) ? a : []);
           setBlogCounts({
             published: Array.isArray(published) ? published.length : 0,
@@ -116,11 +115,14 @@ function AdminDashboard({ firstName }: { firstName: string }) {
     return () => { cancelled = true; };
   }, []);
 
-  const stats = useMemo(() => ({
-    total: users.length,
-    editors: users.filter(isEditor).length,
-    readers: users.filter((u) => isReader(u) && !isEditor(u)).length,
-  }), [users]);
+  const stats = useMemo(() => {
+    const merged = mergeMembers(members, users);
+    return {
+      total: merged.length,
+      readers: merged.filter((u) => roleKind(u) === 'reader').length,
+      pendingMembers: merged.filter((u) => u.membershipStatus === 'PENDING').length,
+    };
+  }, [members, users]);
   const pending = useMemo(() => apps.filter((a) => a.status === 'PENDING'), [apps]);
 
   const subtitle = loading
@@ -139,7 +141,7 @@ function AdminDashboard({ firstName }: { firstName: string }) {
           value={loading ? '…' : stats.total}
           color={NEUTRAL_COLOR}
           href="/admin/users"
-          sub={loading ? undefined : `${pending.length} rédacteur(s) en attente de validation`}
+          sub={loading ? undefined : `${stats.pendingMembers} en attente`}
         />
         <BlogsStatCard published={blogCounts.published} pending={blogCounts.pending} loading={loading} />
         <StatCard label="Lecteurs" value={loading ? '…' : stats.readers} color="var(--gray-600)" href="/admin/users" />

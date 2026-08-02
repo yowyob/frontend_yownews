@@ -10,13 +10,12 @@ import {
   listRoles,
   listTenantUsers,
   assignRole,
+  revokeRole,
   provisionDefaultRoles,
   findRoleIdByCode,
   ROLE_CODE_READER,
   ROLE_CODE_NEWSLETTER_READER,
   ROLE_CODE_EDITOR,
-  ROLE_CODE_NEWSLETTER_EDITOR,
-  ROLE_CODE_FORUM_USER,
   OWNER_ROLE_CODES,
   ROLE_CODE_OWNER,
 } from '@/server/ksm/modules/administration';
@@ -43,6 +42,7 @@ function buildAdminSession(contextual: authApi.ContextualLoginResponse): AppSess
       id: s.id,
       tenantId: contextual.selectedTenantId,
       email: s.email,
+      username: s.username,
       firstName: s.firstName ?? undefined,
       lastName: s.lastName ?? undefined,
       roles: s.authorities,
@@ -66,6 +66,31 @@ function buildAdminSession(contextual: authApi.ContextualLoginResponse): AppSess
  */
 export function invalidateAdminSession(): void {
   cachedSession = null;
+}
+
+/**
+ * Exécute `fn` avec la session admin ; si l'appel échoue avec 401 (token en cache invalidé côté
+ * KSM — ex. redémarrage avec régénération de la paire de clés JWT en local), invalide le cache et
+ * retente une fois avec un login frais. Même pattern que `checkOrgSubscription`
+ * (`org-activation.ts`), factorisé ici pour les autres appelants best-effort (résolution de
+ * nom/photo d'auteur, etc.). Renvoie `null` si aucune session admin n'est disponible (non
+ * configurée) ou si le retry échoue aussi.
+ */
+export async function withAdminSession<T>(fn: (admin: AppSession) => Promise<T>): Promise<T | null> {
+  const admin = await getAdminSession();
+  if (!admin) return null;
+  try {
+    return await fn(admin);
+  } catch (cause) {
+    if (cause instanceof HttpError && cause.status === 401) {
+      logger.warn({}, 'ksm.admin_session.retry_after_401');
+      invalidateAdminSession();
+      const fresh = await getAdminSession();
+      if (!fresh) return null;
+      return await fn(fresh);
+    }
+    throw cause;
+  }
 }
 
 /**
@@ -210,91 +235,45 @@ export async function provisionReaderRoles(userId: string | undefined, email?: s
   }
 }
 
-// ── Auto-provisionnement des rôles de service (brique unique) ────────────────────────────────
+// ── Bascule Lecteur→Rédacteur (brique unique) ─────────────────────────────────────────────────
 //
-// Contrainte KSM (vérifiée) : pour attribuer un rôle scopé ORGANIZATION sur une org X, l'identité
-// qui agit doit être MEMBRE de X (sinon 401 "organization not accessible") + porter tenant:admin.
-// L'admin plateforme n'est membre que de l'org plateforme → il ne peut PAS attribuer un rôle sur
-// l'org freelance d'un utilisateur. Le scope TENANT est refusé (400, ces rôles sont de type
-// ORGANIZATION). SEULE voie possible : l'utilisateur — OWNER de sa propre org, donc membre +
-// tenant:admin — s'auto-attribue le rôle scopé sur son org, via SON token (vérifié : 201).
-//
-// Ci-dessous, une brique data-driven qui matérialise, sur l'org de l'utilisateur, les rôles
-// correspondant à son niveau d'habilitation. L'admin garde le contrôle d'accès (il APPROUVE la
-// candidature rédacteur) ; ici on ne fait que matérialiser au login le niveau déjà autorisé.
-
-export type EntitlementLevel = 'reader' | 'editor';
-
-// Source unique de la matrice niveau → rôles. FORUM_USER est un rôle de base (tout utilisateur peut
-// créer un forum public, ensuite approuvé par l'admin). EDUCATION_EDITOR inclut déjà les perms read,
-// donc supersède le rôle lecteur education au niveau editor.
-const SERVICE_ROLES_BY_LEVEL: Record<EntitlementLevel, readonly string[]> = {
-  reader: [ROLE_CODE_READER, ROLE_CODE_NEWSLETTER_READER, ROLE_CODE_FORUM_USER],
-  editor: [ROLE_CODE_EDITOR, ROLE_CODE_NEWSLETTER_EDITOR, ROLE_CODE_FORUM_USER],
-};
-
-// Permission "marqueur" par code de rôle : si elle est déjà dans le token, le rôle est inutile à
-// réassigner (idempotence bon marché, sans lecture des assignations).
-const ROLE_MARKER_PERMISSION: Record<string, string> = {
-  [ROLE_CODE_READER]: 'education:content:read',
-  [ROLE_CODE_EDITOR]: 'education:content:create',
-  [ROLE_CODE_NEWSLETTER_READER]: 'newsletter:newsletter:read',
-  [ROLE_CODE_NEWSLETTER_EDITOR]: 'newsletter:newsletter:create',
-  [ROLE_CODE_FORUM_USER]: 'forum:create',
-};
-
-function tokenHasPermission(session: AppSession, perm: string): boolean {
-  return (session.user.permissions ?? session.user.roles ?? []).some(
-    (p) => p === perm || p.startsWith(perm + '#'),
-  );
-}
+// Modèle courant : chaque compte est un "employé" invité dans l'org Yowyob Education. Le contrôle
+// d'accès reste centralisé : l'admin (owner de l'org) APPROUVE la candidature rédacteur, puis
+// c'est lui qui attribue le rôle — jamais l'utilisateur lui-même. Peu importe qu'un compte
+// possède par ailleurs une autre organisation ou non, seule son appartenance "employé" à Yowyob
+// Education compte ici. (L'ancien modèle — un compte auto-attribuant son rôle sur SA PROPRE org,
+// en tant qu'OWNER de celle-ci — est abandonné.)
 
 /**
- * Matérialise, **via le token de l'utilisateur** (`session`, OWNER de son org), les rôles de service
- * du niveau `level`, scopés sur `organizationId` (son org). Idempotent : ne (ré)assigne un rôle que
- * si sa permission marqueur est absente du token courant. Best-effort par rôle (un 409 "déjà assigné"
- * est loggé sans bloquer les autres). Les IDs de rôle sont résolus via l'identité admin (lecture
- * seule ; repli sur `session`).
+ * Promeut un employé de l'org Yowyob Education de Lecteur à Rédacteur : révoque le rôle Lecteur
+ * puis assigne le rôle Rédacteur, via l'identité admin (owner de l'org, habilité à y gérer les
+ * rôles) — même mécanisme que la bascule manuelle de l'écran admin « Utilisateurs »
+ * (`/api/admin/users/{id}/roles`). Idempotent (renvoie `false` sans rien faire si déjà promu).
+ * Best-effort par étape : une révocation en échec n'empêche pas l'attribution du nouveau rôle
+ * (KSM tolère la coexistence temporaire des deux).
  */
-export async function ensureServiceRolesSelf(
-  session: AppSession,
-  organizationId: string,
-  level: EntitlementLevel,
-): Promise<boolean> {
-  // Rôles du niveau dont la permission marqueur n'est PAS déjà dans le token (à (ré)attribuer).
-  const missing = SERVICE_ROLES_BY_LEVEL[level].filter((code) => {
-    const marker = ROLE_MARKER_PERMISSION[code];
-    return !(marker && tokenHasPermission(session, marker));
-  });
-  if (missing.length === 0) return false; // déjà tout provisionné → aucun appel KSM
+export async function promoteToEditorOnPlatformOrg(adminSession: AppSession, userId: string): Promise<boolean> {
+  const [users, roles] = await Promise.all([listTenantUsers(adminSession), listRoles(adminSession)]);
+  const user = users.find((u) => u.userId === userId);
+  const editorRole = roles.find((r) => r.code === ROLE_CODE_EDITOR);
+  if (!user || !editorRole) return false;
+  if (user.roles.some((r) => r.code === ROLE_CODE_EDITOR)) return false; // déjà promu
 
-  const roleSource = (await getAdminSession()) ?? session;
-  const roles = await listRoles(roleSource);
-  const roleIdByCode = new Map(roles.map((r) => [r.code, r.id]));
-
-  let changed = false;
-  for (const code of missing) {
-    const roleId = roleIdByCode.get(code);
-    if (!roleId) {
-      logger.warn({ code, organizationId }, 'ksm.service_role.role_not_found');
-      continue;
-    }
+  for (const r of user.roles.filter((r) => r.code === ROLE_CODE_READER)) {
     try {
-      await assignRole(session, session.user.id, roleId, organizationId);
-      changed = true;
+      await revokeRole(adminSession, userId, r.assignmentId);
     } catch (cause) {
-      logger.error({ cause, code, organizationId }, 'ksm.service_role.self_assign_failed');
+      logger.error({ cause, userId }, 'ksm.editor_promotion.revoke_reader_failed');
     }
   }
-  return changed;
+  try {
+    await assignRole(adminSession, userId, editorRole.id);
+    return true;
+  } catch (cause) {
+    logger.error({ cause, userId }, 'ksm.editor_promotion.assign_editor_failed');
+    return false;
+  }
 }
-
-// NB : la promotion Lecteur→Rédacteur ne matérialise PLUS les rôles ici. L'ancien
-// `promoteToEditorRoles` attribuait via l'admin un rôle scopé sur l'org PLATEFORME, invisible dans
-// le token freelance du rédacteur (il restait bloqué en "reader", ne pouvait pas créer). Désormais
-// l'approbation ne fait qu'enregistrer le statut APPROVED ; le rédacteur matérialise lui-même son
-// rôle éditeur (scopé sur SON org) à sa connexion suivante, via `ensureServiceRolesSelf(level='editor')`
-// appelé depuis la route de login. Cf. docs/service-role-provisioning.md.
 
 /**
  * Identité à utiliser pour les opérations d'administration d'une ORGANISATION (employés, rôles).

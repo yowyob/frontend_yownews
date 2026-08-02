@@ -104,8 +104,15 @@ export async function updateGroup(session: AppSession, groupId: string, body: Pa
   return readRaw<DiscussionGroup>(res);
 }
 
+// Modération admin : supprime n'importe quel groupe (permission forum:delete:all).
 export async function deleteGroup(session: AppSession, groupId: string) {
   await callKsm<Response>(`/api/v1/forum/groups/${groupId}`, { method: 'DELETE', raw: true }, { session });
+}
+
+// Self-service créateur : supprime SON PROPRE groupe (creatorId vérifié côté backend, userId
+// résolu depuis le JWT — jamais transmis par le client).
+export async function deleteOwnGroup(session: AppSession, groupId: string) {
+  await callKsm<Response>(`/api/v1/forum/groups/${groupId}/mine`, { method: 'DELETE', raw: true }, { session });
 }
 
 export async function createGroup(session: AppSession, body: { name: string; description?: string; type: GroupType; creatorId: string; creatorName?: string; members?: string[]; parentCommunityId?: string }) {

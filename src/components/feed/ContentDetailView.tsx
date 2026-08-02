@@ -80,6 +80,7 @@ export default function ContentDetailView({ contentType, id, bleed = true }: { c
   const [replyFormOpen, setReplyFormOpen] = useState<Record<string, boolean>>({});
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [authorRedacteur, setAuthorRedacteur] = useState<ApprovedRedacteur>(null);
+  const [authorHasNewsletter, setAuthorHasNewsletter] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [subscribeBusy, setSubscribeBusy] = useState(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
@@ -217,19 +218,33 @@ export default function ContentDetailView({ contentType, id, bleed = true }: { c
     return () => { cancelled = true; };
   }, [item?.authorId]);
 
+  // Le rédacteur peut être approuvé sans avoir encore créé/publié de newsletter (deux entités
+  // distinctes côté KSM) : on vérifie séparément qu'une publication APPROVED existe réellement,
+  // sinon le bouton « S'abonner » resterait visible sans rien à s'abonner.
+  useEffect(() => {
+    if (!item?.authorId) return;
+    let cancelled = false;
+    apiFetch<{ hasNewsletter: boolean }>(`/api/newsletter/newsletters/by-author/${item.authorId}`)
+      .then((r) => { if (!cancelled) setAuthorHasNewsletter(!!r?.hasNewsletter); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [item?.authorId]);
+
   // Reflète un abonnement déjà existant à l'auteur (sinon le bouton repart toujours à zéro).
+  // Dépend aussi de sessionUser?.id : sans ça, une reconnexion sous un autre compte sans démontage
+  // complet du composant (ex. retour arrière du navigateur) laisserait le bouton afficher
+  // "Abonné" hérité de la session précédente, sans que le nouveau compte soit réellement abonné.
   useEffect(() => {
     if (!authorRedacteur) return;
     let cancelled = false;
     apiFetch<{ id: string }[]>('/api/newsletter/subscriptions/redacteurs')
       .then((mine) => {
-        if (!cancelled && Array.isArray(mine) && mine.some((r) => r.id === authorRedacteur.id)) {
-          setSubscribed(true);
-        }
+        if (cancelled) return;
+        setSubscribed(Array.isArray(mine) && mine.some((r) => r.id === authorRedacteur.id));
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [authorRedacteur]);
+  }, [authorRedacteur, sessionUser?.id]);
 
   const [shareCopied, setShareCopied] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -442,7 +457,7 @@ export default function ContentDetailView({ contentType, id, bleed = true }: { c
     : '<p><em>Aucun contenu.</em></p>';
 
   const showFollow = !!(followCounts && sessionUser && sessionUser.id !== item.authorId);
-  const showSubscribe = !!(sessionUser && authorRedacteur);
+  const showSubscribe = !!(sessionUser && authorRedacteur && authorHasNewsletter);
 
   const articleContent = (
     <>

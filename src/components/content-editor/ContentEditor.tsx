@@ -446,7 +446,7 @@ export default function ContentEditor(
           <button type="button" onClick={() => setStep(1)} style={{
             background: '#fff', color: 'var(--gray-700, #374151)', border: '1px solid var(--gray-200, #e5e7eb)',
             borderRadius: '999px', padding: '13px 22px', fontSize: '14px', fontFamily: 'var(--font-d)', fontWeight: 600, cursor: 'pointer',
-          }}>← Métadonnées</button>
+          }}> Métadonnées</button>
         )}
         {twoStep && step === 1 ? (
           <button type="button" disabled={!title.trim()} onClick={() => setStep(2)} style={{
@@ -454,7 +454,7 @@ export default function ContentEditor(
             padding: '13px 28px', fontSize: '14px', fontFamily: 'var(--font-d)', fontWeight: 700,
             cursor: title.trim() ? 'pointer' : 'default', opacity: title.trim() ? 1 : 0.6,
             boxShadow: '0 4px 16px rgba(255,107,53,.3)',
-          }}>Suivant →</button>
+          }}>Suivant </button>
         ) : (
           <button type="button" disabled={saving} onClick={submit} style={{
             background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '999px',

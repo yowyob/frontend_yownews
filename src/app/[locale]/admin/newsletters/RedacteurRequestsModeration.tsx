@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import RowMenu from '@/components/education/RowMenu';
+import { useConfirm } from '@/components/ui/useConfirm';
 
 type RedacteurStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVOKED';
 type RedacteurRequest = { id: string; email: string; nom: string; prenom: string; status: RedacteurStatus; createdAt?: string | null };
@@ -31,6 +32,7 @@ export default function RedacteurRequestsModeration() {
   const [items, setItems] = useState<RedacteurRequest[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const load = async (activeTab: Tab) => {
     setItems(null);
@@ -67,7 +69,7 @@ export default function RedacteurRequestsModeration() {
   };
 
   const revoke = async (id: string) => {
-    if (!window.confirm('Révoquer ce rédacteur ? Il perdra immédiatement le droit de publier.')) return;
+    if (!(await confirm('Révoquer ce rédacteur ? Il perdra immédiatement le droit de publier.'))) return;
     setBusyId(id); setError(null);
     try {
       await apiFetch(`/api/newsletter/admin/redacteurs/${id}/revoke`, { method: 'POST' });
@@ -85,6 +87,7 @@ export default function RedacteurRequestsModeration() {
 
   return (
     <div>
+      {ConfirmDialog}
       <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid var(--gray-200)', marginBottom: '16px' }}>
         <button type="button" style={tabStyle('attente')} onClick={() => setTab('attente')}>En attente</button>
         <button type="button" style={tabStyle('validees')} onClick={() => setTab('validees')}>Validées</button>

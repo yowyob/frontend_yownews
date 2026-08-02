@@ -15,6 +15,7 @@ export default async function ProfileLayout({ children }: { children: React.Reac
     user: session.user,
     workspace: session.workspace,
     forcePasswordChange: session.forcePasswordChange ?? false,
+    termsConsent: session.termsConsent,
     expiresAt: session.expiresAt,
   };
 

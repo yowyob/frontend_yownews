@@ -2,6 +2,7 @@
 import { useState, useEffect, type CSSProperties } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { EDUCATION_DOMAINS } from '@/lib/education-domains';
+import { useConfirm } from '@/components/ui/useConfirm';
 
 export type TaxonomyItem = {
   id: string;
@@ -31,6 +32,7 @@ export default function TaxonomyManager({ resource, singular, plural, canDelete 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -123,7 +125,7 @@ export default function TaxonomyManager({ resource, singular, plural, canDelete 
 
   async function handleDelete(it: TaxonomyItem) {
     setMenu(null);
-    if (!window.confirm(`Supprimer « ${it.name} » ?`)) return;
+    if (!(await confirm(`Supprimer « ${it.name} » ?`))) return;
     try {
       await apiFetch(`/api/education/${resource}/${it.id}`, { method: 'DELETE' });
       setItems((prev) => prev.filter((x) => x.id !== it.id));
@@ -137,6 +139,7 @@ export default function TaxonomyManager({ resource, singular, plural, canDelete 
 
   return (
     <div>
+      {ConfirmDialog}
       {toast && (
         <div style={{ position: 'fixed', top: '20px', right: '24px', zIndex: 9999, background: 'var(--primary)', color: '#fff', padding: '12px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-d)', boxShadow: '0 8px 24px rgba(0,0,0,.2)' }}>
           {toast}

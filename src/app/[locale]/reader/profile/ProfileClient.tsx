@@ -1,9 +1,9 @@
 'use client';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { Link } from '@/i18n/navigation';
 import { apiFetch, BffApiError } from '@/lib/api-client';
 import { useSessionUser } from '@/components/providers/session-provider';
-import UserAvatar from '@/components/ui/UserAvatar';
+import UserAvatar, { setUserPhotoId } from '@/components/ui/UserAvatar';
 import BlogPreviewModal, { type BlogPreviewData } from '@/components/education/BlogPreviewModal';
 
 type Application = {
@@ -93,6 +93,32 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
   const [loading, setLoading] = useState(view === 'reader');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Photo de profil : `undefined` = pas encore renseignée cette session → UserAvatar résout via
+  // userId comme avant ; après upload on force la valeur pour un rafraîchissement immédiat.
+  const [photoId, setPhotoId] = useState<string | null | undefined>(undefined);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  async function handlePhotoChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPhotoError(null);
+    setPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await apiFetch<{ photoId: string }>('/api/profile/photo', { method: 'POST', body: fd, json: false });
+      setPhotoId(res.photoId);
+      if (sessionUser?.id) setUserPhotoId(sessionUser.id, res.photoId);
+    } catch (err) {
+      setPhotoError(err instanceof BffApiError ? err.message : "Échec de l'envoi de la photo.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
 
   // Champs du formulaire « Devenir Rédacteur »
   const [domains, setDomains] = useState<string[]>([]);
@@ -193,13 +219,33 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
       {/* En-tête profil */}
       <div style={{ ...card, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <UserAvatar name={displayName} userId={sessionUser?.id} size={64} fontSize={22} />
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <UserAvatar name={displayName} userId={sessionUser?.id} photoId={photoId} size={64} fontSize={22} zoomable />
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={photoUploading}
+              title="Changer la photo de profil"
+              style={{
+                position: 'absolute', bottom: -2, right: -2, width: 24, height: 24, borderRadius: '50%',
+                border: '2px solid #fff', background: 'var(--accent)', color: '#fff', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', cursor: photoUploading ? 'wait' : 'pointer', padding: 0,
+              }}
+            >
+              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            </button>
+            <input ref={photoInputRef} type="file" accept="image/*" hidden onChange={handlePhotoChange} />
+          </div>
           <div style={{ minWidth: 0 }}>
             <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--primary)', margin: 0 }}>{displayName}</h1>
             <div style={{ color: 'var(--gray-500)', fontSize: 14 }}>{email}</div>
             <span style={{ display: 'inline-block', marginTop: 6, padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: isEditor ? 'rgba(255,107,53,.12)' : 'var(--gray-100)', color: isEditor ? 'var(--accent)' : 'var(--gray-600)' }}>
               {roleLabel}
             </span>
+            {photoError && <div style={{ color: '#B91C1C', fontSize: 12, marginTop: 4 }}>{photoError}</div>}
           </div>
         </div>
 
@@ -286,7 +332,7 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
           ) : application?.status === 'APPROVED' ? (
             <>
               <p style={{ fontSize: 14, color: 'var(--gray-600)', margin: '0 0 12px' }}>
-                Votre candidature est approuvée 🎉 — <strong>reconnectez-vous</strong> pour activer votre
+                Votre candidature est approuvée , <strong>reconnectez-vous</strong> pour activer votre
                 espace Rédacteur (création de blogs, podcasts, cours…).
               </p>
               <button
