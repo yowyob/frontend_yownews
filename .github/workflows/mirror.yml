@@ -16,7 +16,7 @@ jobs:
     permissions:
       contents: write
     env:
-      UPSTREAM: https://github.com/mayega-git/frontend_yownews.git
+      UPSTREAM: https://github.com/devStackMay/frontend_yownews.git
       UPSTREAM_BRANCH: master
     steps:
       - uses: actions/checkout@v4
@@ -35,3 +35,15 @@ jobs:
           if git diff --cached --quiet; then echo "no change"; exit 0; fi
           git commit -m "mirror: sync https://github.com/mayega-git/frontend_yownews.git@$UPSTREAM_BRANCH"
           git push "https://x-access-token:${MIRROR_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
+
+      - name: Trigger deploy agent
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_deploy "$DEPLOY_USER@$DEPLOY_HOST" "docker exec deploy-agent node src/index.js deploy yownews"
