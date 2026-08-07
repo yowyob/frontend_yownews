@@ -40,6 +40,21 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+tsconfig.tsbuildinfo
+tsbuildinfo
 
 /.env*.local
 docs/*
+
+offline-sync/*
+offline-sync
+src/services
+scripts
+src/components/providers/OfflineSyncProviders.tsx
+
+package.json
+package-lock.json
+tsconfig.json
+next.config.ts
+postcss.config.mjs
+eslint.config.mjs
