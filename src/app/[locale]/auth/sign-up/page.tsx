@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 
 export default function SignUpPage() {
-  const targetUrl = process.env.NEXT_PUBLIC_CREATE_ACCOUNT_URL || '#';
+  const targetUrl = process.env.NEXT_PUBLIC_CREATE_ACCOUNT_URL || 'https://yowauth.yowyob.com/';
 
   return (
     <AuthLayout
