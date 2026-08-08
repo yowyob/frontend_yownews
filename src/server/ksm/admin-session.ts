@@ -111,6 +111,17 @@ export async function getAdminSession(): Promise<AppSession | null> {
   const emailUsableAsIdentifier = !!emailEnv && !emailEnv.toLowerCase().endsWith('@example.com');
   const principal = serverEnv.KSM_PLATFORM_ADMIN_USERNAME || (emailUsableAsIdentifier ? emailEnv : '');
   if (!principal || !password) {
+    // TEMPORAIRE — debug prod, à retirer une fois la cause confirmée
+    logger.warn(
+      {
+        ksmEnvKeysPresent: Object.keys(process.env).filter((k) => k.startsWith('KSM_')).sort(),
+        usernameRaw: JSON.stringify(serverEnv.KSM_PLATFORM_ADMIN_USERNAME),
+        emailRaw: JSON.stringify(serverEnv.KSM_PLATFORM_ADMIN_EMAIL),
+        passwordLength: password.length,
+        passwordHasSurroundingWhitespace: password !== password.trim(),
+      },
+      'ksm.admin_session.debug_env_dump',
+    );
     logger.warn(
       {
         hasUsername: !!serverEnv.KSM_PLATFORM_ADMIN_USERNAME,
@@ -136,10 +147,7 @@ export async function getAdminSession(): Promise<AppSession | null> {
     return cachedSession;
   } catch (cause) {
     if (cause instanceof HttpError && cause.errorCode === 'MFA_REQUIRED_FOR_ADMIN') {
-      // Le compte de service (KSM_PLATFORM_ADMIN_*) doit rester un OWNER simple (autorité
-      // ROLE_OWNER) : KSM n'exige la MFA que pour les rôles ROLE_{TENANT,SYSTEM,GENERAL,IAM}_ADMIN
-      // (cf. AuthController.isPrivilegedAdminAuthority côté KSM). Si ce signal apparaît, le compte a
-      // été mal reconfiguré (rôle admin ajouté par erreur) — échec explicite plutôt que silencieux.
+  
       logger.error(
         { cause },
         'ksm.admin_session.mfa_required — le compte de service porte un rôle admin privilégié ' +
