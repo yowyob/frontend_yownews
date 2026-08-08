@@ -124,6 +124,7 @@ export async function getAdminSession(): Promise<AppSession | null> {
     );
     logger.warn(
       {
+        
         hasUsername: !!serverEnv.KSM_PLATFORM_ADMIN_USERNAME,
         hasEmailFallback: emailUsableAsIdentifier,
         hasPassword: !!password,
