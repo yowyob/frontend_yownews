@@ -106,16 +106,17 @@ export async function getAdminSession(): Promise<AppSession | null> {
   }
 
   const password = serverEnv.KSM_PLATFORM_ADMIN_PASSWORD;
-  // Depuis le rebuild KSM, l'ancien email (@example.com) n'est plus un identifiant de connexion :
-  // se connecter avec lui échoue (401) et déclenche l'envoi d'un email « identifiant Yowyob ». On
-  // utilise donc le USERNAME en priorité ; l'email n'est accepté en repli que s'il est déjà un
-  // identifiant valide (username sans @, ou adresse @yowyob.com).
+  
   const emailEnv = serverEnv.KSM_PLATFORM_ADMIN_EMAIL;
   const emailUsableAsIdentifier = !!emailEnv && !emailEnv.toLowerCase().endsWith('@example.com');
   const principal = serverEnv.KSM_PLATFORM_ADMIN_USERNAME || (emailUsableAsIdentifier ? emailEnv : '');
   if (!principal || !password) {
     logger.warn(
-      {},
+      {
+        hasUsername: !!serverEnv.KSM_PLATFORM_ADMIN_USERNAME,
+        hasEmailFallback: emailUsableAsIdentifier,
+        hasPassword: !!password,
+      },
       'ksm.admin_session.not_configured — définir KSM_PLATFORM_ADMIN_USERNAME (+ _PASSWORD) ; ' +
         "l'email @example.com n'est plus un identifiant de connexion KSM.",
     );

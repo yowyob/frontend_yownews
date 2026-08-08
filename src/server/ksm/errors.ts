@@ -10,9 +10,7 @@ export async function unwrapKsm<T>(res: Response, requestId?: string): Promise<T
   }
 
   if (!res.ok) {
-    if (!envelope) {
-      logger.error({ requestId, status: res.status, body: text }, 'ksm.call_failed_raw_body');
-    }
+    logger.error({ requestId, status: res.status, body: text }, 'ksm.call_failed_raw_body');
     throw new HttpError({
       status: res.status,
       errorCode: envelope?.errorCode ?? null,
