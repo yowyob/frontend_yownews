@@ -4,6 +4,8 @@ services:
     container_name: yownews-frontend
     pull_policy: always
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       HOSTNAME: "${HOSTNAME:-0.0.0.0}"
       KSM_BASE_URL: "${KSM_BASE_URL:?}"
