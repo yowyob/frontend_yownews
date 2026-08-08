@@ -13,6 +13,7 @@ type CallOptions = {
   agencyId?: string | null;
   headers?: Record<string, string>;
   raw?: boolean;
+  expectedErrorCodes?: readonly string[];
   signal?: AbortSignal;
 };
 
@@ -91,5 +92,5 @@ export async function callKsm<T>(
   logger.debug({ requestId, path, method, status: res.status, durationMs }, 'ksm.call');
 
   if (options.raw) return res as unknown as T;
-  return unwrapKsm<T>(res, requestId);
+  return unwrapKsm<T>(res, requestId, options.expectedErrorCodes);
 }

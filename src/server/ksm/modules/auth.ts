@@ -34,6 +34,7 @@ export function discoverContexts(principal: string, password: string) {
     method: 'POST',
     body: { principal, password },
     authenticated: false,
+    expectedErrorCodes: ['AUTH_YOWYOB_IDENTITY_REMINDER_SENT'],
   });
 }
 

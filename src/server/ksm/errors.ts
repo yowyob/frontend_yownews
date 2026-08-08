@@ -2,7 +2,7 @@ import 'server-only';
 import { logger } from '@/server/logger';
 import { HttpError, type ApiResponse } from '@/lib/types/api';
 
-export async function unwrapKsm<T>(res: Response, requestId?: string): Promise<T> {
+export async function unwrapKsm<T>(res: Response, requestId?: string, expectedErrorCodes: readonly string[] = []): Promise<T> {
   const text = await res.text();
   let envelope: ApiResponse<T> | null = null;
   if (text) {
@@ -10,10 +10,15 @@ export async function unwrapKsm<T>(res: Response, requestId?: string): Promise<T
   }
 
   if (!res.ok) {
-    logger.error({ requestId, status: res.status, body: text }, 'ksm.call_failed_raw_body');
+    const errorCode = envelope?.errorCode ?? null;
+    if (errorCode && expectedErrorCodes.includes(errorCode)) {
+      logger.info({ requestId, status: res.status, errorCode }, 'ksm.call_expected_rejection');
+    } else {
+      logger.error({ requestId, status: res.status, body: text }, 'ksm.call_failed_raw_body');
+    }
     throw new HttpError({
       status: res.status,
-      errorCode: envelope?.errorCode ?? null,
+      errorCode,
       message: envelope?.message ?? res.statusText ?? 'Request failed',
       requestId,
     });
