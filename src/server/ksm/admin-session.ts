@@ -197,6 +197,34 @@ export async function getNewsletterReaderRoleId(adminSession: AppSession): Promi
 }
 
 /**
+ * Attribue uniquement le rôle Lecteur newsletter après une invitation. L'API d'invitation
+ * renvoie une adhésion, mais son `userId` ne doit pas être réutilisé comme identifiant du
+ * compte dans l'API d'administration : on résout donc explicitement le compte du tenant.
+ */
+export async function provisionNewsletterReaderRole(email: string): Promise<void> {
+  const adminSession = await getAdminSession();
+  if (!adminSession) return;
+
+  try {
+    const users = await listTenantUsers(adminSession);
+    const userId = users.find((user) => user.email.toLowerCase() === email.toLowerCase())?.userId;
+    if (!userId) {
+      logger.warn({ email }, 'ksm.admin_session.newsletter_reader_user_not_found');
+      return;
+    }
+
+    const [newsletterRoleId, platformOrgId] = await Promise.all([
+      getNewsletterReaderRoleId(adminSession),
+      resolvePlatformOrganizationId(),
+    ]);
+    if (!newsletterRoleId || !platformOrgId) return;
+    await assignRole(adminSession, userId, newsletterRoleId, platformOrgId);
+  } catch (cause) {
+    logger.error({ cause, email }, 'ksm.admin_session.newsletter_reader_role_assignment_failed');
+  }
+}
+
+/**
  * Assigne les rôles Lecteur par défaut d'un compte Yowyob Education : education + newsletter,
  * scopés sur l'org **plateforme**, via l'identité admin. Utilisé au sign-up (le lecteur n'a pas
  * encore d'org freelance et lit alors dans le contexte plateforme). L'admin étant membre de l'org
