@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
       }
     } catch (cause) {
       logger.error({ cause }, 'auth.login.membership_status_failed');
-      isActiveMember = hasEducationAccess(session);
+      isActiveMember = cause instanceof HttpError && cause.status === 404 ? false : hasEducationAccess(session);
     }
 
     // La gate d'adhésion ACTIVE ne concerne QUE les lecteurs (accès obtenu par invitation). Le staff
