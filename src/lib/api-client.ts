@@ -54,24 +54,20 @@ export async function apiFetch<T>(path: string, init: ClientRequestInit = {}): P
   }
 
   if (!response.ok || (payload && payload.ok === false)) {
-    // Session expirée (token KSM périmé côté BFF → 401 UNAUTHORIZED) : au lieu de laisser
-    // remonter une erreur brute dans l'UI, on renvoie l'utilisateur se ré-authentifier.
-    const isAuthError = response.status === 401 || (payload && payload.errorCode === 'UNAUTHORIZED');
+    // Seul le BFF qui constate l'absence de sa session doit déclencher une reconnexion.
+    // Un 401 peut aussi être renvoyé par KSM pour une autorisation métier manquante
+    // (ex. /education/domains ou /editor-applications/me) alors que la session web est valide.
+    // Traiter tous les 401 comme une déconnexion envoyait à tort l'utilisateur vers /auth/login.
+    const isMissingSession =
+      response.status === 401 &&
+      payload?.errorCode === 'UNAUTHORIZED' &&
+      payload?.message === 'Not authenticated';
     const isProtectedRoute = typeof window !== 'undefined' && (
       window.location.pathname.includes('/reader') ||
       window.location.pathname.includes('/editor') ||
       window.location.pathname.includes('/admin')
     );
-    if (isAuthError && isProtectedRoute) {
-      // Diagnostic (problème 4 — déconnexion inattendue) : capture le triplet exact renvoyé par le
-      // BFF/KSM avant la redirection, pour distinguer une vraie expiration de session d'un 401 dont
-      // la cause réelle reste à confirmer (cf. plan). À retirer une fois la cause confirmée en prod.
-      console.error('[api-client] forced logout on 401', {
-        path,
-        status: response.status,
-        errorCode: payload?.errorCode ?? null,
-        message: payload?.message ?? response.statusText ?? null,
-      });
+    if (isMissingSession && isProtectedRoute) {
       const next = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.assign(`/auth/login?next=${next}`);
     }
