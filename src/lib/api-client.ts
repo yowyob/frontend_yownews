@@ -63,6 +63,15 @@ export async function apiFetch<T>(path: string, init: ClientRequestInit = {}): P
       window.location.pathname.includes('/admin')
     );
     if (isAuthError && isProtectedRoute) {
+      // Diagnostic (problème 4 — déconnexion inattendue) : capture le triplet exact renvoyé par le
+      // BFF/KSM avant la redirection, pour distinguer une vraie expiration de session d'un 401 dont
+      // la cause réelle reste à confirmer (cf. plan). À retirer une fois la cause confirmée en prod.
+      console.error('[api-client] forced logout on 401', {
+        path,
+        status: response.status,
+        errorCode: payload?.errorCode ?? null,
+        message: payload?.message ?? response.statusText ?? null,
+      });
       const next = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.assign(`/auth/login?next=${next}`);
     }

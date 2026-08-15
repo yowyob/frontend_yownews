@@ -50,6 +50,10 @@ export interface AppSession {
    *  (`/api/org/switchable`, `/api/org/switch`) sans re-login. Absent pour les sessions mock/legacy. */
   accessibleOrganizations?: AccessibleOrganization[];
   expiresAt: number;
+  /** Refresh token KSM (SessionTokensController#refresh) — permet à `readSession()` de renouveler
+   *  silencieusement l'accessToken (TTL court, 15 min par défaut) au lieu de forcer une reconnexion. */
+  refreshToken?: string;
+  refreshExpiresAt?: number;
   forcePasswordChange?: boolean;
   termsConsent?: TermsConsent;
 }

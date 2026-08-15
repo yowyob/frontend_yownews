@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { Link } from '@/i18n/navigation';
 import { apiFetch, BffApiError } from '@/lib/api-client';
-import { useSessionUser } from '@/components/providers/session-provider';
+import { useSessionUser, useWorkspace } from '@/components/providers/session-provider';
 import UserAvatar, { setUserPhotoId } from '@/components/ui/UserAvatar';
 import BlogPreviewModal, { type BlogPreviewData } from '@/components/education/BlogPreviewModal';
 
@@ -87,6 +87,7 @@ function Dropdown({ label, active, disabled, children }: { label: string; active
 
 export default function ProfileClient({ displayName, email, view, roleLabel, blogHref = '/editor/blog', orgMode = false }: Props) {
   const sessionUser = useSessionUser();
+  const workspace = useWorkspace();
   // En mode org, on force la vue « éditeur » (posts) : pas de bannière « Devenir Rédacteur ».
   const isEditor = view === 'editor' || orgMode;
   const [application, setApplication] = useState<Application | null>(null);
@@ -142,7 +143,15 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
       try {
         const data = await apiFetch<Application | null>('/api/role-requests/me');
         if (!cancelled) setApplication(data);
-      } catch {
+      } catch (e) {
+        // Diagnostic (problème 4) : corrèle l'échec avec le tenant/org actifs en session — permet de
+        // vérifier si le 401 apparaît précisément quand `workspace` diffère du contexte attendu.
+        console.error('[reader/profile] /api/role-requests/me failed', {
+          status: e instanceof BffApiError ? e.status : null,
+          errorCode: e instanceof BffApiError ? e.errorCode : null,
+          message: e instanceof Error ? e.message : String(e),
+          workspace,
+        });
         if (!cancelled) setApplication(null);
       } finally {
         if (!cancelled) setLoading(false);
@@ -150,7 +159,15 @@ export default function ProfileClient({ displayName, email, view, roleLabel, blo
     })();
     apiFetch<string[]>('/api/education/domains')
       .then((data) => { if (!cancelled) setDomainOptions(Array.isArray(data) ? data : []); })
-      .catch(() => { if (!cancelled) setDomainOptions([]); });
+      .catch((e) => {
+        console.error('[reader/profile] /api/education/domains failed', {
+          status: e instanceof BffApiError ? e.status : null,
+          errorCode: e instanceof BffApiError ? e.errorCode : null,
+          message: e instanceof Error ? e.message : String(e),
+          workspace,
+        });
+        if (!cancelled) setDomainOptions([]);
+      });
     return () => { cancelled = true; };
   }, [isEditor]);
 

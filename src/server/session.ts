@@ -4,7 +4,13 @@ import { getIronSession } from 'iron-session';
 import { serverEnv } from '@/env';
 import { redis } from '@/server/redis';
 import { getMockSession } from '@/server/mock-session';
+import { logger } from '@/server/logger';
+import { refreshTokens } from '@/server/ksm/modules/auth';
 import type { AppSession } from '@/lib/types/auth';
+
+// Marge de rafraîchissement proactif (même valeur que `admin-session.ts`) : évite qu'un accessToken
+// expire pile entre la lecture de la session et l'appel KSM qui suit.
+const REFRESH_MARGIN_SECONDS = 60;
 
 type CookiePayload = { sid?: string; expiresAt?: number };
 
@@ -38,17 +44,40 @@ export async function readSession(): Promise<AppSession | null> {
   if (serverEnv.MOCK_MODE) return await getMockSession();
   const cookie = await getCookieSession();
   if (!cookie.sid) return null;
-  if (cookie.expiresAt && cookie.expiresAt * 1000 < Date.now()) return null;
   try {
     const raw = await redis().get(key(cookie.sid));
     if (!raw) return null;
     const session = JSON.parse(raw) as AppSession;
-    if (session.expiresAt * 1000 < Date.now()) {
+    // TTL de l'accessToken KSM court (15 min par défaut) : sans ceci, la session mourait dès
+    // l'expiration sans possibilité de la renouveler (cf. plan, problème 4 — gap confirmé).
+    if (session.expiresAt * 1000 - REFRESH_MARGIN_SECONDS * 1000 < Date.now()) {
+      const refreshed = session.refreshToken ? await tryRefreshSession(cookie.sid, session) : null;
+      if (refreshed) return refreshed;
       await redis().del(key(cookie.sid));
       return null;
     }
     return session;
   } catch {
+    return null;
+  }
+}
+
+async function tryRefreshSession(sid: string, session: AppSession): Promise<AppSession | null> {
+  if (!session.refreshToken) return null;
+  try {
+    const result = await refreshTokens(session.refreshToken);
+    const next: AppSession = {
+      ...session,
+      accessToken: result.accessToken,
+      expiresAt: Math.floor(Date.now() / 1000) + result.accessExpiresInSeconds,
+      refreshToken: result.refreshToken,
+      refreshExpiresAt: Math.floor(Date.now() / 1000) + result.refreshExpiresInSeconds,
+    };
+    await redis().set(key(sid), JSON.stringify(next), 'EX', serverEnv.SESSION_TTL_SECONDS);
+    return next;
+  } catch (cause) {
+    // Refresh token lui-même expiré/révoqué : vraie déconnexion, légitime.
+    logger.warn({ cause }, 'session.refresh_failed');
     return null;
   }
 }

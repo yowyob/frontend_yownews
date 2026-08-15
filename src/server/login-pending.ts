@@ -40,6 +40,12 @@ export function buildSession(contextual: ContextualLoginResponse): AppSession {
     sid: crypto.randomUUID(),
     accessToken: s.accessToken,
     expiresAt: Math.floor(Date.now() / 1000) + s.expiresInSeconds,
+    ...(s.refreshToken
+      ? {
+          refreshToken: s.refreshToken,
+          refreshExpiresAt: Math.floor(Date.now() / 1000) + (s.refreshExpiresInSeconds ?? 0),
+        }
+      : {}),
     forcePasswordChange: s.forcePasswordChange,
     user: {
       id: s.id,

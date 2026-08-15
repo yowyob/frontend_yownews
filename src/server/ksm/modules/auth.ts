@@ -63,6 +63,11 @@ export type KsmLoginSession = {
   accessToken: string;
   tokenType: string;
   expiresInSeconds: number;
+  // Émis par KSM au login/select-context (LoginResponse.java) mais jusqu'ici jamais capturés côté
+  // frontend — aucun rafraîchissement silencieux n'existait, la session mourait dès l'expiration de
+  // l'accessToken (TTL court, 15 min par défaut) sans possibilité de la renouveler.
+  refreshToken?: string;
+  refreshExpiresInSeconds?: number;
   authorities: string[];
   organizations: UserOrganizationAccess[];
 };
@@ -81,6 +86,28 @@ export function selectContext(
   return callKsm<ContextualLoginResponse>('/api/auth/select-context', {
     method: 'POST',
     body: { selectionToken, contextId, ...(organizationId ? { organizationId } : {}) },
+    authenticated: false,
+  });
+}
+
+// ── Rafraîchissement de session ────────────────────────────────────────────────
+
+export type RefreshTokensResponse = {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  accessExpiresInSeconds: number;
+  refreshExpiresInSeconds: number;
+  refreshExpiresAt: string;
+};
+
+// Échange le refresh token contre un nouvel accessToken (+ refresh token roté, cf.
+// SessionTokensController#refresh côté KSM). Non authentifié : c'est justement l'échange qui
+// (re)fournit l'authentification.
+export function refreshTokens(refreshToken: string) {
+  return callKsm<RefreshTokensResponse>('/api/auth/refresh', {
+    method: 'POST',
+    body: { refreshToken },
     authenticated: false,
   });
 }
