@@ -91,6 +91,21 @@ export async function callKsm<T>(
   const durationMs = Date.now() - started;
   logger.debug({ requestId, path, method, status: res.status, durationMs }, 'ksm.call');
 
+  // Diagnostic ciblé (déconnexion forcée, cf. plan) : un 401 à corps vide (rejet KSM brut, avant
+  // toute logique métier) persiste même juste après un re-login admin frais — pas un token périmé.
+  // On capture le contexte exact envoyé (headers sans secrets) pour confirmer, au prochain repro, si
+  // tenantId/organizationId/userId correspondent bien à ce qu'on suppose.
+  if (res.status === 401) {
+    logger.warn({
+      requestId, path, method,
+      tenantId: headers['X-Tenant-Id'] ?? null,
+      organizationId: headers['X-Organization-Id'] ?? null,
+      userId: headers['X-User-Id'] ?? null,
+      hasAuthorization: Boolean(headers.Authorization),
+      hasApiKey: Boolean(headers['X-Api-Key']),
+    }, 'ksm.call_401_context');
+  }
+
   if (options.raw) return res as unknown as T;
   return unwrapKsm<T>(res, requestId, options.expectedErrorCodes);
 }

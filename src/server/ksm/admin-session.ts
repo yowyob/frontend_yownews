@@ -125,12 +125,21 @@ export async function getAdminSession(): Promise<AppSession | null> {
 
   try {
     const discovery = await authApi.discoverContexts(principal, password);
-    const ctx = discovery.contexts[0];
-    if (!ctx) {
+    if (!discovery.contexts.length) {
       logger.warn({}, 'ksm.admin_session.no_context');
       return null;
     }
-    const orgId = ctx.organizations[0]?.organizationId ?? undefined;
+    // Le compte de service admin peut lui aussi avoir plusieurs contexts (modèle "1 personne = 1
+    // compte", cf. auth/login/route.ts). Prendre contexts[0] à l'aveugle peut sélectionner un tenant
+    // où l'admin n'a pas l'org plateforme, alors que resolvePlatformOrganizationId() (lookup par code,
+    // indépendant de cette session) renvoie bien l'id de l'org plateforme sous SON tenant à elle —
+    // combiner les deux produit un tenantId/organizationId incohérents que KSM rejette (401 brut).
+    // On sélectionne donc explicitement le context dont l'org correspond au code plateforme.
+    const candidates = discovery.contexts.flatMap((c) => (c.organizations ?? []).map((org) => ({ ctx: c, org })));
+    const platformCandidate = candidates.find(({ org }) => org.organizationCode === serverEnv.KSM_PLATFORM_ORG_CODE);
+    const chosen = platformCandidate ?? candidates[0];
+    const ctx = chosen?.ctx ?? discovery.contexts[0]!;
+    const orgId = chosen?.org?.organizationId ?? ctx.organizations[0]?.organizationId ?? undefined;
     const contextual = await authApi.selectContext(discovery.selectionToken, ctx.contextId, orgId);
     cachedSession = buildAdminSession(contextual);
     return cachedSession;
