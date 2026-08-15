@@ -36,7 +36,7 @@ export default function SignUpPage() {
 
         {/* Bouton Orange CTA */}
         <a
-          href={"https://yowauth.yowyob.com/"}
+          href={"https://ksm.yowyob.com/"}
           target="_blank"
           rel="noopener noreferrer"
           className="w-full py-3.5 px-6 rounded-[10px] font-display font-semibold text-sm text-white bg-[#FF6B35] hover:bg-[#E55A2B] shadow-[0_4px_14px_rgba(255,107,53,.25)] active:scale-[0.99] transition-all duration-200 text-center block"

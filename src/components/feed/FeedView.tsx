@@ -82,9 +82,16 @@ export default function FeedView({ contentType }: { contentType: 'BLOG' | 'PODCA
       apiFetch<FeedItem[]>(`${FEED_PATH[contentType]}?limit=20`)
         .then((data) => { if (!cancelled) setItems(Array.isArray(data) ? data : []); })
         .catch((e) => {
+          const message = e instanceof Error ? e.message : 'Erreur de chargement du fil';
+          // Diagnostic "Organization is not subscribed to service EDUCATION" : ce check backend porte
+          // sur l'organisation/tenant sélectionné à la connexion (cf. discover-contexts multi-tenant) —
+          // logger le contexte utile pour confirmer/écarter une mauvaise sélection d'org côté login.
+          if (message.toLowerCase().includes('not subscribed')) {
+            console.error('[feed] organization service subscription check failed', { contentType, path: FEED_PATH[contentType], message });
+          }
           if (!cancelled) {
             setItems([]);
-            setError(e instanceof Error ? e.message : 'Erreur de chargement du fil');
+            setError(message);
           }
         });
 

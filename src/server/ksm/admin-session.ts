@@ -111,20 +111,8 @@ export async function getAdminSession(): Promise<AppSession | null> {
   const emailUsableAsIdentifier = !!emailEnv && !emailEnv.toLowerCase().endsWith('@example.com');
   const principal = serverEnv.KSM_PLATFORM_ADMIN_USERNAME || (emailUsableAsIdentifier ? emailEnv : '');
   if (!principal || !password) {
-    // TEMPORAIRE — debug prod, à retirer une fois la cause confirmée
     logger.warn(
       {
-        ksmEnvKeysPresent: Object.keys(process.env).filter((k) => k.startsWith('KSM_')).sort(),
-        usernameRaw: JSON.stringify(serverEnv.KSM_PLATFORM_ADMIN_USERNAME),
-        emailRaw: JSON.stringify(serverEnv.KSM_PLATFORM_ADMIN_EMAIL),
-        passwordLength: password.length,
-        passwordHasSurroundingWhitespace: password !== password.trim(),
-      },
-      'ksm.admin_session.debug_env_dump',
-    );
-    logger.warn(
-      {
-        
         hasUsername: !!serverEnv.KSM_PLATFORM_ADMIN_USERNAME,
         hasEmailFallback: emailUsableAsIdentifier,
         hasPassword: !!password,

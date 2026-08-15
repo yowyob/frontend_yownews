@@ -23,6 +23,39 @@ function hasEducationAccess(session: AppSession): boolean {
   return perms.some((p) => p === 'education:content:read' || p.startsWith('education:content:read#'));
 }
 
+type DiscoveredContexts = Awaited<ReturnType<typeof authApi.discoverContexts>>['contexts'];
+
+// discover-contexts peut renvoyer PLUSIEURS contextes (tenants) pour un même utilisateur, chacun avec
+// sa propre liste d'organisations — parfois vide (ex: un tenant "personnel" sans org). Prendre
+// contexts[0] puis organizations[0] à l'aveugle peut donc sélectionner un tenant sans aucune
+// organisation EDUCATION, alors qu'un autre contexte contient bien l'org Yowyob Education attendue.
+// On cherche la première organisation (tous contextes confondus) qui expose le service EDUCATION.
+function selectEducationContext(contexts: DiscoveredContexts) {
+  const candidates = contexts.flatMap((c) => (c.organizations ?? []).map((org) => ({ ctx: c, org })));
+  const eduCandidate = candidates.find(({ org }) => org.services?.includes('EDUCATION'));
+  const chosen = eduCandidate ?? candidates[0];
+  const ctx = chosen?.ctx ?? contexts[0];
+  const orgId = chosen?.org?.organizationId ?? ctx.organizations?.[0]?.organizationId ?? undefined;
+
+  if (contexts.length > 1 || candidates.length > 1) {
+    console.warn('[auth/login] multiple contexts/organizations available', {
+      chosenContextId: ctx.contextId,
+      chosenOrgId: orgId,
+      allContexts: contexts.map((c) => ({
+        contextId: c.contextId,
+        tenantId: c.tenantId,
+        organizations: (c.organizations ?? []).map((o) => ({
+          id: o.organizationId,
+          code: o.organizationCode,
+          services: o.services,
+        })),
+      })),
+    });
+  }
+
+  return { ctx, orgId };
+}
+
 export async function POST(request: NextRequest) {
   return handleRoute(async () => {
     const body = (await request.json()) as { email?: string; password?: string };
@@ -71,13 +104,9 @@ export async function POST(request: NextRequest) {
       return { requiresSignUp: true as const };
     }
 
-    const ctx = discovery.contexts[0];
+    const { ctx, orgId } = selectEducationContext(discovery.contexts);
     const orgs = ctx.organizations ?? [];
 
-    // Organisation unique (Yowyob Education) : plus de sélection/switch d'org. On auto-sélectionne
-    // le premier contexte d'org disponible (0 org = contexte plateforme par défaut ; ≥1 = validé
-    // nativement par KSM via validateOrganizationAccess).
-    const orgId = orgs[0]?.organizationId ?? undefined;
     let contextual = await authApi.selectContext(discovery.selectionToken, ctx.contextId, orgId);
     let session = buildSession(contextual);
 
@@ -124,13 +153,12 @@ export async function POST(request: NextRequest) {
     async function freshLogin(preferOrgId?: string): Promise<void> {
       try {
         const d = await authApi.discoverContexts(principal, password);
-        const c = d.contexts[0];
-        if (!c) return;
+        if (!d.contexts.length) return;
+        const { ctx: c, orgId: reselectedOrgId } = selectEducationContext(d.contexts);
         const target =
           preferOrgId ??
           c.organizations.find((o) => o.organizationId === orgId)?.organizationId ??
-          c.organizations[0]?.organizationId ??
-          undefined;
+          reselectedOrgId;
         contextual = await authApi.selectContext(d.selectionToken, c.contextId, target);
         session = buildSession(contextual);
       } catch (cause) {

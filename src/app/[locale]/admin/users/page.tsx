@@ -118,6 +118,10 @@ export default function UsersPage() {
       showToast(`${displayName(user)} : ${target === 'editor' ? 'Rédacteur' : 'Lecteur'}`);
       await fetchData();
     } catch (e) {
+      // Diagnostic "User not found" : le backend cherche le compte dans le tenant de CETTE org
+      // (findById tenant-scopé) au lieu d'un lookup global — échoue si le compte de l'utilisateur
+      // invité "vit" dans un autre tenant d'origine. Contexte utile pour l'équipe backend.
+      console.error('[admin/users] setRole failed', { userId: user.userId, target, targetRoleId: targetRole.id, error: e });
       showToast(e instanceof Error ? e.message : 'Échec du changement de rôle');
     } finally {
       setBusyId(null);
@@ -220,7 +224,11 @@ export default function UsersPage() {
                 <tr><td colSpan={5} style={{ padding: '48px', textAlign: 'center', color: 'var(--gray-400)', fontSize: '14px' }}>Aucun membre</td></tr>
               ) : paginated.map((u, idx) => {
                 const kind = roleKind(u);
-                const badge = ROLE_BADGE[kind];
+                // Fallback diagnostic : si aucun rôle RBAC n'est résolu mais que l'adhésion porte un
+                // roleName, on l'affiche plutôt que "Aucun rôle" (cf. mergeMembers, admin-members.ts).
+                const badge = kind === 'none' && u.roleName
+                  ? { label: u.roleName, bg: ROLE_BADGE.none.bg, color: ROLE_BADGE.none.color }
+                  : ROLE_BADGE[kind];
                 const active = u.membershipStatus === 'ACTIVE';
                 return (
                   <tr key={u.userId} style={{ borderTop: '1px solid var(--gray-100)', background: idx % 2 === 1 ? 'var(--gray-50)' : '#fff', opacity: busyId === u.userId ? .5 : 1 }}>

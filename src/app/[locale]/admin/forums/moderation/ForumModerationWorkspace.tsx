@@ -113,8 +113,19 @@ export default function ForumModerationWorkspace({ kind = 'forum' }: { kind?: 'f
     setItems(null);
     try {
       const data = await apiFetch<DiscussionGroup[]>('/api/forum/groups/admin');
+      // TEMPORAIRE — debug page vide, à retirer une fois la cause confirmée
+      console.log('[forum-admin] /api/forum/groups/admin →', {
+        count: Array.isArray(data) ? data.length : 'not-an-array',
+        byType: Array.isArray(data) ? data.reduce<Record<string, number>>((acc, g) => { acc[g.type] = (acc[g.type] ?? 0) + 1; return acc; }, {}) : null,
+        byStatus: Array.isArray(data) ? data.reduce<Record<string, number>>((acc, g) => { acc[g.status] = (acc[g.status] ?? 0) + 1; return acc; }, {}) : null,
+        sample: Array.isArray(data) ? data.slice(0, 3) : data,
+      });
       setItems(Array.isArray(data) ? data : []);
-    } catch { setItems([]); }
+    } catch (e) {
+      // TEMPORAIRE — debug page vide, à retirer une fois la cause confirmée
+      console.error('[forum-admin] /api/forum/groups/admin a échoué', e);
+      setItems([]);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

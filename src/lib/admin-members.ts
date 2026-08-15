@@ -32,6 +32,9 @@ export type AdminUser = {
   userId: string; membershipId: string; email: string; username: string;
   membershipStatus: string; createdAt: string | null;
   firstName: string | null; lastName: string | null; photoId: string | null; roles: RoleRef[];
+  /** Nom du rôle d'adhésion (employee_membership.role_id), indépendant du RBAC ci-dessus.
+   *  Utilisé en fallback d'affichage + diagnostic quand `roles` est vide alors que ce champ ne l'est pas. */
+  roleName: string | null;
 };
 
 export type RoleKind = 'editor' | 'reader' | 'admin' | 'none';
@@ -42,6 +45,13 @@ export function mergeMembers(members: Member[], tenantUsers: TenantUser[]): Admi
   const byId = new Map(tenantUsers.map((u) => [u.userId, u]));
   return members.map((m) => {
     const tu = byId.get(m.userId);
+    const rbacRoles = tu?.roles ?? [];
+    if (rbacRoles.length === 0 && m.roleName) {
+      // Diagnostic : l'adhésion (employee_membership.role_id) porte un rôle, mais aucun rôle RBAC
+      // n'est résolu pour cet utilisateur (/api/administration/users) — la colonne "Rôle" de l'UI
+      // affichera un fallback sur m.roleName au lieu de "Aucun rôle" tant que ceci se produit.
+      console.warn('[admin-members] mismatch adhésion/RBAC', { userId: m.userId, membershipRoleName: m.roleName, rbacFound: Boolean(tu) });
+    }
     return {
       userId: m.userId,
       membershipId: m.id,
@@ -52,7 +62,8 @@ export function mergeMembers(members: Member[], tenantUsers: TenantUser[]): Admi
       firstName: m.firstName ?? tu?.firstName ?? null,
       lastName: m.lastName ?? tu?.lastName ?? null,
       photoId: m.photoId ?? null,
-      roles: tu?.roles ?? [],
+      roles: rbacRoles,
+      roleName: m.roleName ?? null,
     };
   });
 }
