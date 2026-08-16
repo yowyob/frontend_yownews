@@ -4,8 +4,7 @@ import { getIronSession } from 'iron-session';
 import { serverEnv } from '@/env';
 import { redis } from '@/server/redis';
 import { getMockSession } from '@/server/mock-session';
-import { logger } from '@/server/logger';
-import { refreshTokens } from '@/server/ksm/modules/auth';
+import { refreshAccessToken } from '@/server/ksm/token-refresh';
 import type { AppSession } from '@/lib/types/auth';
 
 // Marge de rafraîchissement proactif (même valeur que `admin-session.ts`) : évite qu'un accessToken
@@ -51,7 +50,7 @@ export async function readSession(): Promise<AppSession | null> {
     // TTL de l'accessToken KSM court (15 min par défaut) : sans ceci, la session mourait dès
     // l'expiration sans possibilité de la renouveler (cf. plan, problème 4 — gap confirmé).
     if (session.expiresAt * 1000 - REFRESH_MARGIN_SECONDS * 1000 < Date.now()) {
-      const refreshed = session.refreshToken ? await tryRefreshSession(cookie.sid, session) : null;
+      const refreshed = session.refreshToken ? await refreshAccessToken(cookie.sid, session) : null;
       if (refreshed) return refreshed;
       await redis().del(key(cookie.sid));
       return null;
@@ -62,24 +61,15 @@ export async function readSession(): Promise<AppSession | null> {
   }
 }
 
-async function tryRefreshSession(sid: string, session: AppSession): Promise<AppSession | null> {
-  if (!session.refreshToken) return null;
-  try {
-    const result = await refreshTokens(session.refreshToken);
-    const next: AppSession = {
-      ...session,
-      accessToken: result.accessToken,
-      expiresAt: Math.floor(Date.now() / 1000) + result.accessExpiresInSeconds,
-      refreshToken: result.refreshToken,
-      refreshExpiresAt: Math.floor(Date.now() / 1000) + result.refreshExpiresInSeconds,
-    };
-    await redis().set(key(sid), JSON.stringify(next), 'EX', serverEnv.SESSION_TTL_SECONDS);
-    return next;
-  } catch (cause) {
-    // Refresh token lui-même expiré/révoqué : vraie déconnexion, légitime.
-    logger.warn({ cause }, 'session.refresh_failed');
-    return null;
-  }
+// Le sid réel (celui qui sert de clé Redis, cf. writeSession ci-dessous) n'est fiable que via le
+// cookie — le champ `session.sid` embarqué dans l'objet AppSession stocké n'est PAS garanti
+// identique (buildSession génère son propre sid, indépendant de celui que writeSession choisit
+// réellement comme clé). Exposé pour callKsm (client.ts), qui a besoin du sid réel pour son propre
+// retry sur 401 sans dupliquer la lecture du cookie ici.
+export async function getCurrentSessionId(): Promise<string | null> {
+  if (serverEnv.MOCK_MODE) return null;
+  const cookie = await getCookieSession();
+  return cookie.sid ?? null;
 }
 
 export async function destroySession(): Promise<void> {

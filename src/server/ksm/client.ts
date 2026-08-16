@@ -2,8 +2,10 @@ import 'server-only';
 import { serverEnv } from '@/env';
 import type { AppSession } from '@/lib/types/auth';
 import { logger } from '@/server/logger';
+import { getCurrentSessionId } from '@/server/session';
 import { unwrapKsm } from './errors';
 import { resolvePlatformOrganizationId } from './platform-org';
+import { refreshAccessToken } from './token-refresh';
 
 type CallOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -104,6 +106,35 @@ export async function callKsm<T>(
       hasAuthorization: Boolean(headers.Authorization),
       hasApiKey: Boolean(headers['X-Api-Key']),
     }, 'ksm.call_401_context');
+
+    // Un accessToken proche de l'expiration a pu tourner entre la lecture de la session (par
+    // l'appelant) et cet appel — retry une fois après rafraîchissement. Sessions admin exclues
+    // naturellement : buildAdminSession() ne pose jamais refreshToken. refreshAccessToken()
+    // partage le même verrou anti-course que le rafraîchissement proactif de session.ts (cf. plan,
+    // cause #2) : peu importe lequel des deux déclenche le refresh en premier, un seul appel réseau
+    // réel a lieu.
+    if (authenticated && session?.refreshToken) {
+      const sid = await getCurrentSessionId();
+      if (sid) {
+        logger.warn({ requestId, path, method }, 'ksm.call_401_retry_attempt');
+        let refreshed: AppSession | null = null;
+        try {
+          refreshed = await refreshAccessToken(sid, session);
+        } catch (cause) {
+          logger.warn({ requestId, path, method, cause }, 'ksm.call_401_refresh_failed');
+        }
+        if (refreshed) {
+          const retryHeaders = { ...headers, Authorization: `Bearer ${refreshed.accessToken}` };
+          const retryRes = await fetch(url, { ...init, headers: retryHeaders });
+          logger.warn(
+            { requestId, path, method, retryStatus: retryRes.status },
+            'ksm.call_401_retry_result',
+          );
+          if (options.raw) return retryRes as unknown as T;
+          return unwrapKsm<T>(retryRes, requestId, options.expectedErrorCodes);
+        }
+      }
+    }
   }
 
   if (options.raw) return res as unknown as T;
