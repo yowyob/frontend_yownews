@@ -31,7 +31,11 @@ export function orgDisplayName(org: UserOrganizationAccess): string {
   return org.displayName ?? org.shortName ?? org.longName ?? org.legalName ?? org.organizationCode ?? org.organizationId;
 }
 
-export function buildSession(contextual: ContextualLoginResponse): AppSession {
+// `tenantId` = le tenant que LE FRONTEND a demandé (ctx.tenantId de discoverContexts), pas
+// contextual.selectedTenantId : ce dernier renvoie le tenant "maison" du compte (identité globale)
+// au lieu du tenant du contexte choisi (bug backend confirmé, AuthController#selectContext — le JWT,
+// lui, porte bien le bon tenant, seul ce champ de réponse est faux). Cf. rapport backend.
+export function buildSession(contextual: ContextualLoginResponse, tenantId: string): AppSession {
   const s = contextual.session;
   const selectedOrg = contextual.selectedOrganizationId
     ? s.organizations?.find((o) => o.organizationId === contextual.selectedOrganizationId)
@@ -49,7 +53,7 @@ export function buildSession(contextual: ContextualLoginResponse): AppSession {
     forcePasswordChange: s.forcePasswordChange,
     user: {
       id: s.id,
-      tenantId: contextual.selectedTenantId,
+      tenantId,
       email: s.email,
       username: s.username,
       firstName: s.firstName ?? undefined,
@@ -58,7 +62,7 @@ export function buildSession(contextual: ContextualLoginResponse): AppSession {
       permissions: s.authorities,
     },
     workspace: {
-      tenantId: contextual.selectedTenantId,
+      tenantId,
       ...(contextual.selectedOrganizationId
         ? {
             organizationId: contextual.selectedOrganizationId,

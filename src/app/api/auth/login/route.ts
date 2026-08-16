@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     const orgs = ctx.organizations ?? [];
 
     let contextual = await authApi.selectContext(discovery.selectionToken, ctx.contextId, orgId);
-    let session = buildSession(contextual);
+    let session = buildSession(contextual, ctx.tenantId);
 
     // Le login n'est autorisé que pour un membre ACTIF de l'org plateforme (invitation acceptée). Le
     // rôle lecteur étant attribué dès l'invitation (statut PENDING), on ne peut PAS se fier au rôle :
@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
           c.organizations.find((o) => o.organizationId === orgId)?.organizationId ??
           reselectedOrgId;
         contextual = await authApi.selectContext(d.selectionToken, c.contextId, target);
-        session = buildSession(contextual);
+        session = buildSession(contextual, c.tenantId);
       } catch (cause) {
         logger.error({ cause }, 'auth.login.fresh_login_failed');
       }
