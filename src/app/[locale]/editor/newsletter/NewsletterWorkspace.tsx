@@ -578,7 +578,7 @@ function MyNewslettersSubscribers() {
       setPublications(mine);
       mine.forEach((p) => {
         apiFetch<string[]>(`/api/newsletter/newsletters/${p.id}/subscribers`)
-          .then((emails) => setCounts((prev) => ({ ...prev, [p.id]: emails.length })))
+          .then((emails) => setCounts((prev) => ({ ...prev, [p.id]: (emails ?? []).length })))
           .catch(() => {});
       });
     })();

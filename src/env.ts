@@ -4,7 +4,7 @@ export const serverEnv = {
   KSM_BASE_URL:         process.env.KSM_BASE_URL         ?? 'http://localhost:8080',
   KSM_CLIENT_ID:        process.env.KSM_CLIENT_ID        ?? 'yowyob-edu-frontend',
   KSM_API_KEY:          process.env.KSM_API_KEY          ?? '',
-  KSM_PLATFORM_ORG_CODE: process.env.KSM_PLATFORM_ORG_CODE ?? 'YOWYOB_EDU',
+  KSM_PLATFORM_ORG_CODE: process.env.KSM_PLATFORM_ORG_CODE ?? 'YOWYOB_EDUCATION',
   // Compte admin Yowyob Education utilisé côté serveur pour poser le rôle Lecteur aux nouveaux inscrits
   // (l'admin a déjà administration:assignments:write). Jamais exposé au client.
   // Depuis le rebuild KSM, l'email n'est plus un identifiant de connexion : on se connecte par

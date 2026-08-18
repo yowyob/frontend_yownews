@@ -2,6 +2,7 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import type { AppSession } from '@/lib/types/auth';
 import { handleRoute, fail } from '@/server/api-response';
+import { serverEnv } from '@/env';
 import * as authApi from '@/server/ksm/modules/auth';
 import { writeSession } from '@/server/session';
 import { buildSession, saveJoinPending } from '@/server/login-pending';
@@ -29,10 +30,12 @@ type DiscoveredContexts = Awaited<ReturnType<typeof authApi.discoverContexts>>['
 // sa propre liste d'organisations — parfois vide (ex: un tenant "personnel" sans org). Prendre
 // contexts[0] puis organizations[0] à l'aveugle peut donc sélectionner un tenant sans aucune
 // organisation EDUCATION, alors qu'un autre contexte contient bien l'org Yowyob Education attendue.
-// On cherche la première organisation (tous contextes confondus) qui expose le service EDUCATION.
+// On cherche l'organisation (tous contextes confondus) dont le code correspond à l'org plateforme —
+// matching explicite par organizationCode plutôt que par service déclaré, pour rester déterministe
+// même si une org tierce venait un jour à exposer aussi le service EDUCATION.
 function selectEducationContext(contexts: DiscoveredContexts) {
   const candidates = contexts.flatMap((c) => (c.organizations ?? []).map((org) => ({ ctx: c, org })));
-  const eduCandidate = candidates.find(({ org }) => org.services?.includes('EDUCATION'));
+  const eduCandidate = candidates.find(({ org }) => org.organizationCode === serverEnv.KSM_PLATFORM_ORG_CODE);
   const chosen = eduCandidate ?? candidates[0];
   const ctx = chosen?.ctx ?? contexts[0];
   const orgId = chosen?.org?.organizationId ?? ctx.organizations?.[0]?.organizationId ?? undefined;
