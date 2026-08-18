@@ -319,16 +319,26 @@ export async function listMyCategorySubscriptions(session: AppSession, userId: s
 // ── Abonnements lecteur (rédacteurs précis) ──
 export async function subscribeRedacteur(session: AppSession, userId: string, redacteurId: string, email: string) {
   if (serverEnv.MOCK_MODE) return;
-  await callKsm<Response>(
+  const res = await callKsm<Response>(
     `/api/v1/newsletter/redacteurs/${redacteurId}/subscribe?userId=${userId}`,
     { method: 'POST', body: { email }, raw: true },
     { session },
   );
+  // TEMPORAIRE — debug abonnement silencieusement perdu, à retirer une fois la cause confirmée
+  if (!res.ok) {
+    const body = await res.clone().text().catch(() => '<body illisible>');
+    console.error('[newsletter-subscribe:redacteur] KSM a répondu en échec', { status: res.status, redacteurId, userId, body });
+  }
 }
 
 export async function unsubscribeRedacteur(session: AppSession, userId: string, redacteurId: string) {
   if (serverEnv.MOCK_MODE) return;
-  await callKsm<Response>(`/api/v1/newsletter/redacteurs/${redacteurId}/subscribe?userId=${userId}`, { method: 'DELETE', raw: true }, { session });
+  const res = await callKsm<Response>(`/api/v1/newsletter/redacteurs/${redacteurId}/subscribe?userId=${userId}`, { method: 'DELETE', raw: true }, { session });
+  // TEMPORAIRE — debug abonnement silencieusement perdu, à retirer une fois la cause confirmée
+  if (!res.ok) {
+    const body = await res.clone().text().catch(() => '<body illisible>');
+    console.error('[newsletter-unsubscribe:redacteur] KSM a répondu en échec', { status: res.status, redacteurId, userId, body });
+  }
 }
 
 // ── Abonnement direct à UNE newsletter précise (ne couvre que celle-ci, contrairement au suivi
@@ -336,16 +346,26 @@ export async function unsubscribeRedacteur(session: AppSession, userId: string, 
 // profil public). userId résolu côté KSM depuis le JWT, jamais transmis par le client.
 export async function subscribeToNewsletter(session: AppSession, newsletterId: string, email: string) {
   if (serverEnv.MOCK_MODE) return;
-  await callKsm<Response>(
+  const res = await callKsm<Response>(
     `/api/v1/newsletter/newsletters/${newsletterId}/subscribe`,
     { method: 'POST', body: { email }, raw: true },
     { session },
   );
+  // TEMPORAIRE — debug abonnement silencieusement perdu, à retirer une fois la cause confirmée
+  if (!res.ok) {
+    const body = await res.clone().text().catch(() => '<body illisible>');
+    console.error('[newsletter-subscribe:direct] KSM a répondu en échec', { status: res.status, newsletterId, body });
+  }
 }
 
 export async function unsubscribeFromNewsletter(session: AppSession, newsletterId: string) {
   if (serverEnv.MOCK_MODE) return;
-  await callKsm<Response>(`/api/v1/newsletter/newsletters/${newsletterId}/subscribe`, { method: 'DELETE', raw: true }, { session });
+  const res = await callKsm<Response>(`/api/v1/newsletter/newsletters/${newsletterId}/subscribe`, { method: 'DELETE', raw: true }, { session });
+  // TEMPORAIRE — debug abonnement silencieusement perdu, à retirer une fois la cause confirmée
+  if (!res.ok) {
+    const body = await res.clone().text().catch(() => '<body illisible>');
+    console.error('[newsletter-unsubscribe:direct] KSM a répondu en échec', { status: res.status, newsletterId, body });
+  }
 }
 
 // Newsletters auxquelles le lecteur connecté est directement abonné (pour cocher l'état côté UI).

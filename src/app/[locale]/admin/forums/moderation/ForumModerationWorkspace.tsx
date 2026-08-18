@@ -134,6 +134,19 @@ export default function ForumModerationWorkspace({ kind = 'forum' }: { kind?: 'f
   const kindItems = (items ?? []).filter((g) => isCommunity ? g.type === 'COMMUNITY' : (g.type === 'FORUM' && !g.parentCommunityId));
   const filtered = kindItems.filter((g) => g.status === tab);
 
+  // TEMPORAIRE — debug page vide, à retirer une fois la cause confirmée
+  if (items) {
+    console.log('[forum-admin] post-filter', {
+      kind, tab,
+      rawCount: items.length,
+      kindItemsCount: kindItems.length,
+      filteredCount: filtered.length,
+      distinctTypes: [...new Set(items.map((g) => g.type))],
+      distinctStatuses: [...new Set(items.map((g) => g.status))],
+      distinctParentCommunityId: [...new Set(items.map((g) => g.parentCommunityId))],
+    });
+  }
+
   const act = async (groupId: string, action: 'validate' | 'reject') => {
     setBusyId(groupId); setError(null);
     try {
