@@ -77,9 +77,9 @@ export async function listPublicGroups(session: AppSession) {
   return readRaw<DiscussionGroup[]>(res);
 }
 
-export async function listAllGroups(session: AppSession) {
+export async function listAllGroups(session: AppSession, scope: 'tenant' | 'organization' = 'organization') {
   if (serverEnv.MOCK_MODE) return MOCK_FORUM_GROUPS;
-  const res = await callKsm<Response>('/api/v1/forum/groups/all', { method: 'GET', raw: true }, { session });
+  const res = await callKsm<Response>(`/api/v1/forum/groups/all?scope=${scope}`, { method: 'GET', raw: true }, { session });
   return readRaw<DiscussionGroup[]>(res);
 }
 
