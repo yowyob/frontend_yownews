@@ -31,5 +31,11 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha }}
             ${{ steps.meta.outputs.image }}:main
+          # Ces valeurs sont FIGEES dans l'image d'un front Next.js : elles doivent etre passees
+          # ICI, sinon l'image publiee se comporte autrement que celle construite sur le serveur.
+          # Sans NEXT_PUBLIC_USE_MOCK=false, par exemple, le front repart en mode simulation.
+          # Elles doivent rester identiques a celles declarees cote agent.
+          build-args: |
+            NEXT_PUBLIC_KSM_PLATFORM_ORG_CODE=YOWYOB_EDUCATION
           cache-from: type=gha
           cache-to: type=gha,mode=max
